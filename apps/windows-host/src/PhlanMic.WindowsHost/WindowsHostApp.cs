@@ -23,6 +23,7 @@ internal sealed class WindowsHostApp
 
         var pipeline = new AudioStreamPipeline(config.AudioFormat, config.Buffer);
         var inputSource = CreateInputSource(pipeline);
+        var drain = new DebugPipelineDrain(pipeline);
         inputSource.SessionChanged += (_, snapshot) => LogSessionSnapshot(snapshot);
 
         logger.Info("host_ready", "Windows host foundation is ready.", new Dictionary<string, object?>
@@ -38,10 +39,24 @@ internal sealed class WindowsHostApp
             ["generatedSignalTestMode"] = config.TestMode.Enabled
         });
 
-        var inputTask = inputSource.RunAsync(cancellationToken);
-        var statsTask = LogStatsLoopAsync(inputSource, cancellationToken);
+        using var runtimeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var inputTask = inputSource.RunAsync(runtimeCancellation.Token);
+        var drainTask = drain.RunAsync(runtimeCancellation.Token);
+        var statsTask = LogStatsLoopAsync(inputSource, drain, runtimeCancellation.Token);
 
-        await Task.WhenAll(inputTask, statsTask);
+        try
+        {
+            await inputTask;
+        }
+        finally
+        {
+            if (!runtimeCancellation.IsCancellationRequested)
+            {
+                runtimeCancellation.Cancel();
+            }
+        }
+
+        await Task.WhenAll(drainTask, statsTask);
         logger.Info("host_shutdown", "Host shutdown requested.");
     }
 
@@ -50,7 +65,10 @@ internal sealed class WindowsHostApp
             ? new GeneratedSignalTestSource(config.AudioFormat, config.TestMode, pipeline)
             : new DebugTcpRawPcmReceiver(config.Receiver, config.AudioFormat, pipeline);
 
-    private async Task LogStatsLoopAsync(IAudioInputSource inputSource, CancellationToken cancellationToken)
+    private async Task LogStatsLoopAsync(
+        IAudioInputSource inputSource,
+        DebugPipelineDrain drain,
+        CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(StatsLogInterval);
 
@@ -59,6 +77,7 @@ internal sealed class WindowsHostApp
             while (await timer.WaitForNextTickAsync(cancellationToken))
             {
                 var stats = inputSource.GetStatisticsSnapshot();
+                var drainSnapshot = drain.GetSnapshot();
                 logger.Info("stream_stats", "Stream statistics updated.", new Dictionary<string, object?>
                 {
                     ["bytesReceived"] = stats.BytesReceived,
@@ -68,7 +87,12 @@ internal sealed class WindowsHostApp
                     ["rejectedFrames"] = stats.RejectedFrames,
                     ["droppedFrames"] = stats.DroppedFrames,
                     ["bufferedFrames"] = stats.BufferedFrameCount,
-                    ["lastActivityUtc"] = stats.LastActivityUtc
+                    ["lastActivityUtc"] = stats.LastActivityUtc,
+                    ["drainedFrames"] = drainSnapshot.DrainedFrames,
+                    ["drainedBytes"] = drainSnapshot.DrainedBytes,
+                    ["lastDrainedSequenceNumber"] = drainSnapshot.LastSequenceNumber,
+                    ["lastFrameCapturedAtUtc"] = drainSnapshot.LastFrameCapturedAtUtc,
+                    ["lastFrameDrainedAtUtc"] = drainSnapshot.LastDrainedAtUtc
                 });
             }
         }
