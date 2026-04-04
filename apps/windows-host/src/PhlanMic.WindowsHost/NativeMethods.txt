@@ -1,0 +1,14 @@
+CLSCTX
+DEVICE_STATE
+EDataFlow
+ERole
+IMMDevice
+IMMDeviceCollection
+IMMDeviceEnumerator
+IPropertyStore
+MMDeviceEnumerator
+PKEY_Device_FriendlyName
+PROPERTYKEY
+PROPVARIANT
+PropVariantClear
+STGM
