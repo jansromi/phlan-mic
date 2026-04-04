@@ -95,52 +95,17 @@ function Get-EventTimestampUtc {
     return [DateTimeOffset]::Parse($Event.timestampUtc)
 }
 
-function Get-LatestStreamStatsAtOrBefore {
+function Get-LatestOutputSummaryByScope {
     param(
         [Parameter(Mandatory = $true)]
         [object[]]$Events,
         [Parameter(Mandatory = $true)]
-        [DateTimeOffset]$TimestampUtc
+        [string]$Scope
     )
 
     return $Events |
-        Where-Object { $_.event -eq "stream_stats" } |
-        Where-Object { (Get-EventTimestampUtc -Event $_) -le $TimestampUtc } |
+        Where-Object { $_.event -eq "audio_output_summary" -and $_.summaryScope -eq $Scope } |
         Select-Object -Last 1
-}
-
-function Get-FirstSessionEventByStateAfter {
-    param(
-        [Parameter(Mandatory = $true)]
-        [object[]]$Events,
-        [Parameter(Mandatory = $true)]
-        [string]$State,
-        [Parameter(Mandatory = $true)]
-        [DateTimeOffset]$TimestampUtc
-    )
-
-    return $Events |
-        Where-Object { $_.event -eq "stream_session_changed" -and $_.state -eq $State } |
-        Where-Object { (Get-EventTimestampUtc -Event $_) -ge $TimestampUtc } |
-        Select-Object -First 1
-}
-
-function Get-StatsCounterValue {
-    param(
-        [object]$StatsEvent,
-        [string]$PropertyName
-    )
-
-    if ($null -eq $StatsEvent) {
-        return [int64]0
-    }
-
-    $value = $StatsEvent.$PropertyName
-    if ($null -eq $value) {
-        return [int64]0
-    }
-
-    return [int64]$value
 }
 
 function Stop-HostProcess {
@@ -237,31 +202,25 @@ try {
         throw "Playback never started. Expected audio_output_started after frames were sent. See $hostStdoutLog and $hostStderrLog"
     }
 
-    $statsEvent = $events |
-        Where-Object { $_.event -eq "stream_stats" } |
-        Select-Object -Last 1
+    $disconnectSummary = Get-LatestOutputSummaryByScope -Events $events -Scope "disconnected"
+    $shutdownSummary = Get-LatestOutputSummaryByScope -Events $events -Scope "shutdown"
+    $summaryEvent = if ($null -ne $shutdownSummary) { $shutdownSummary } else { $disconnectSummary }
 
-    if ($null -eq $statsEvent) {
-        throw "No stream_stats event was found. See $hostStdoutLog and $hostStderrLog"
+    if ($null -eq $summaryEvent) {
+        throw "No audio_output_summary event was found. See $hostStdoutLog and $hostStderrLog"
     }
 
-    $completedFrames = [int64]$statsEvent.outputCompletedFrames
-    $acceptedFrames = [int64]$statsEvent.acceptedFrames
+    $completedFrames = [int64]$summaryEvent.outputCompletedFrames
+    $acceptedFrames = [int64]$summaryEvent.acceptedFrames
     $faultCount = @($events | Where-Object { $_.event -eq "stream_session_faulted" }).Count
     $hostStartFailures = @($events | Where-Object { $_.event -eq "host_start_failed" }).Count
     $completedThreshold = [int64][Math]::Floor($framesToSend * 0.8)
-    $baselineStats = Get-LatestStreamStatsAtOrBefore -Events $events -TimestampUtc $senderStartedAtUtc
-    $activeStats = Get-LatestStreamStatsAtOrBefore -Events $events -TimestampUtc $senderFinishedAtUtc
-    $disconnectEvent = Get-FirstSessionEventByStateAfter -Events $events -State "Disconnected" -TimestampUtc $senderStartedAtUtc
-    $disconnectObservedAtUtc = if ($null -ne $disconnectEvent) { Get-EventTimestampUtc -Event $disconnectEvent } else { $null }
-
-    $baselineAcceptedFrames = Get-StatsCounterValue -StatsEvent $baselineStats -PropertyName "acceptedFrames"
-    $baselineCompletedFrames = Get-StatsCounterValue -StatsEvent $baselineStats -PropertyName "outputCompletedFrames"
-    $baselineUnderrunCount = Get-StatsCounterValue -StatsEvent $baselineStats -PropertyName "underrunCount"
-    $activeWindowAcceptedFrames = [Math]::Max(0, $acceptedFrames - $baselineAcceptedFrames)
-    $activeWindowCompletedFrames = [Math]::Max(0, (Get-StatsCounterValue -StatsEvent $activeStats -PropertyName "outputCompletedFrames") - $baselineCompletedFrames)
-    $activeWindowUnderrunCount = [Math]::Max(0, (Get-StatsCounterValue -StatsEvent $activeStats -PropertyName "underrunCount") - $baselineUnderrunCount)
-    $postDisconnectUnderrunCount = [Math]::Max(0, $statsEvent.underrunCount - (Get-StatsCounterValue -StatsEvent $activeStats -PropertyName "underrunCount"))
+    $disconnectObservedAtUtc = if ($null -ne $disconnectSummary) { Get-EventTimestampUtc -Event $disconnectSummary } else { $null }
+    $activeSummary = if ($null -ne $disconnectSummary) { $disconnectSummary } else { $summaryEvent }
+    $activeWindowAcceptedFrames = [int64]$activeSummary.acceptedFrames
+    $activeWindowCompletedFrames = [int64]$activeSummary.outputCompletedFrames
+    $activeWindowUnderrunCount = [int64]$activeSummary.underrunCount
+    $postDisconnectUnderrunCount = [Math]::Max(0, [int64]$summaryEvent.underrunCount - $activeWindowUnderrunCount)
     $activeWindowCompletionRatio = if ($activeWindowAcceptedFrames -gt 0) { [double]$activeWindowCompletedFrames / [double]$activeWindowAcceptedFrames } else { 0.0 }
 
     if ($acceptedFrames -le 0) {
@@ -293,15 +252,14 @@ try {
         activeWindowCompletionRatio = $activeWindowCompletionRatio
         activeWindowUnderrunCount = $activeWindowUnderrunCount
         postDisconnectUnderrunCount = $postDisconnectUnderrunCount
-        underrunCount = [int64]$statsEvent.underrunCount
-        silenceFramesInserted = [int64]$statsEvent.silenceFramesInserted
-        estimatedLatencyMs = [double]$statsEvent.estimatedLatencyMs
-        glitchRatePerMinute = [double]$statsEvent.glitchRatePerMinute
-        outputDeviceName = $statsEvent.outputDeviceName
-        outputFormat = $statsEvent.outputFormat
-        baselineStatsTimestampUtc = if ($null -ne $baselineStats) { Get-EventTimestampUtc -Event $baselineStats } else { $null }
-        activeStatsTimestampUtc = if ($null -ne $activeStats) { Get-EventTimestampUtc -Event $activeStats } else { $null }
-        finalStatsTimestampUtc = Get-EventTimestampUtc -Event $statsEvent
+        underrunCount = [int64]$summaryEvent.underrunCount
+        silenceFramesInserted = [int64]$summaryEvent.silenceFramesInserted
+        estimatedLatencyMs = [double]$summaryEvent.estimatedLatencyMs
+        glitchRatePerMinute = [double]$summaryEvent.glitchRatePerMinute
+        outputDeviceName = $summaryEvent.outputDeviceName
+        outputFormat = $summaryEvent.outputFormat
+        disconnectSummaryTimestampUtc = if ($null -ne $disconnectSummary) { Get-EventTimestampUtc -Event $disconnectSummary } else { $null }
+        shutdownSummaryTimestampUtc = if ($null -ne $shutdownSummary) { Get-EventTimestampUtc -Event $shutdownSummary } else { $null }
         faultCount = $faultCount
         hostStartFailures = $hostStartFailures
         hostStdoutLog = $hostStdoutLog

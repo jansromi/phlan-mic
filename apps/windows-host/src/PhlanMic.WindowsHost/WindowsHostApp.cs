@@ -25,7 +25,7 @@ internal sealed class WindowsHostApp
         var inputSource = CreateInputSource(pipeline);
         using var outputSink = CreateOutputSink(pipeline);
         var outputSnapshot = outputSink.GetSnapshot();
-        inputSource.SessionChanged += (_, snapshot) => LogSessionSnapshot(snapshot);
+        inputSource.SessionChanged += (_, snapshot) => LogSessionSnapshot(snapshot, inputSource, outputSink);
 
         logger.Info("host_ready", "Windows host foundation is ready.", new Dictionary<string, object?>
         {
@@ -67,6 +67,7 @@ internal sealed class WindowsHostApp
         }
 
         await Task.WhenAll(inputTask, outputTask, statsTask);
+        LogOutputSummary("shutdown", inputSource, outputSink);
         logger.Info("host_shutdown", "Host shutdown requested.");
     }
 
@@ -162,7 +163,10 @@ internal sealed class WindowsHostApp
         }
     }
 
-    private void LogSessionSnapshot(StreamSessionSnapshot snapshot)
+    private void LogSessionSnapshot(
+        StreamSessionSnapshot snapshot,
+        IAudioInputSource inputSource,
+        IAudioOutputSink outputSink)
     {
         var properties = new Dictionary<string, object?>
         {
@@ -183,9 +187,65 @@ internal sealed class WindowsHostApp
         if (snapshot.State is StreamSessionState.Faulted)
         {
             logger.Warning("stream_session_faulted", "Stream session faulted.", properties);
+            LogOutputSummary("faulted", inputSource, outputSink);
             return;
         }
 
         logger.Info("stream_session_changed", "Stream session updated.", properties);
+
+        if (snapshot.State is StreamSessionState.Disconnected)
+        {
+            LogOutputSummary("disconnected", inputSource, outputSink);
+        }
+    }
+
+    private void LogOutputSummary(
+        string scope,
+        IAudioInputSource inputSource,
+        IAudioOutputSink outputSink)
+    {
+        var sessionSnapshot = inputSource.GetSessionSnapshot();
+        var inputStats = inputSource.GetStatisticsSnapshot();
+        var outputStats = outputSink.GetSnapshot();
+
+        logger.Info("audio_output_summary", "Audio output summary captured.", new Dictionary<string, object?>
+        {
+            ["summaryScope"] = scope,
+            ["sessionState"] = sessionSnapshot.State.ToString(),
+            ["transportMode"] = sessionSnapshot.TransportMode,
+            ["connectionId"] = sessionSnapshot.ConnectionId,
+            ["connectionCount"] = sessionSnapshot.ConnectionCount,
+            ["disconnectCount"] = sessionSnapshot.DisconnectCount,
+            ["startedAtUtc"] = sessionSnapshot.StartedAtUtc,
+            ["connectedAtUtc"] = sessionSnapshot.ConnectedAtUtc,
+            ["lastActivityUtc"] = sessionSnapshot.LastActivityUtc,
+            ["lastDisconnectedAtUtc"] = sessionSnapshot.LastDisconnectedAtUtc,
+            ["inputBytesReceived"] = inputStats.BytesReceived,
+            ["inputPacketsReceived"] = inputStats.PacketsReceived,
+            ["inputFramesReceived"] = inputStats.FramesReceived,
+            ["acceptedFrames"] = inputStats.AcceptedFrames,
+            ["rejectedFrames"] = inputStats.RejectedFrames,
+            ["droppedFrames"] = inputStats.DroppedFrames,
+            ["bufferedFrames"] = inputStats.BufferedFrameCount,
+            ["outputSink"] = outputStats.SinkKind,
+            ["outputDeviceId"] = outputStats.DeviceId,
+            ["outputDeviceName"] = outputStats.DeviceName,
+            ["outputFormat"] = outputStats.OutputFormat,
+            ["formatConversionActive"] = outputStats.FormatConversionActive,
+            ["outputBufferCount"] = outputStats.BufferCount,
+            ["outputBufferedFrames"] = outputStats.BufferedFrames,
+            ["outputSubmittedFrames"] = outputStats.SubmittedFrames,
+            ["outputCompletedFrames"] = outputStats.CompletedFrames,
+            ["outputCompletedBytes"] = outputStats.CompletedBytes,
+            ["silenceFramesInserted"] = outputStats.SilenceFramesInserted,
+            ["underrunCount"] = outputStats.UnderrunCount,
+            ["estimatedLatencyMs"] = outputStats.EstimatedLatencyMs,
+            ["glitchRatePerMinute"] = outputStats.GlitchRatePerMinute,
+            ["lastOutputSequenceNumber"] = outputStats.LastSequenceNumber,
+            ["outputStartedAtUtc"] = outputStats.StartedAtUtc,
+            ["lastFrameCapturedAtUtc"] = outputStats.LastFrameCapturedAtUtc,
+            ["lastFrameSubmittedAtUtc"] = outputStats.LastSubmittedAtUtc,
+            ["lastFrameCompletedAtUtc"] = outputStats.LastCompletedAtUtc
+        });
     }
 }

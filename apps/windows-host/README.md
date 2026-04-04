@@ -104,4 +104,4 @@ Artifacts are written under `artifacts\phase2-smoke\`:
 
 - `host-*.stdout.log` / `host-*.stderr.log`: host output captured during the run
 - `sender-*.stdout.log` / `sender-*.stderr.log`: debug sender output
-- `summary-*.json`: parsed acceptance summary with frame counts, active-window completion, and separated underrun counts
+- `summary-*.json`: parsed acceptance summary derived from exact `audio_output_summary` host events, including disconnect/shutdown counters
