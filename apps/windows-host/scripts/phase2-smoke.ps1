@@ -512,7 +512,7 @@ try {
     $summaryOutputFormat = [string](Get-PropertyValue -Event $summaryEvent -Name "outputFormat")
     $disconnectSummaryTimestampUtc = if ($null -ne $disconnectSummary) { Get-EventTimestampUtc -Event $disconnectSummary } else { $null }
     $shutdownSummaryTimestampUtc = if ($null -ne $shutdownSummary) { Get-EventTimestampUtc -Event $shutdownSummary } else { $null }
-    $senderRunsArray = @($senderRuns)
+    $senderRunsArray = $senderRuns.ToArray()
 
     $summary = [ordered]@{
         scenario = $Scenario
