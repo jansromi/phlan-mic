@@ -82,3 +82,25 @@ $env:PHLANMIC__OUTPUT__MODE = "DebugDrain"
 $env:PHLANMIC__OUTPUT__DEVICEID = "1"
 $env:PHLANMIC__OUTPUT__TARGETLATENCYMS = "60"
 ```
+
+Phase 2 smoke harness:
+
+Run the Windows-only smoke script to start the host, wait for playback startup, stream a fixed-duration sine signal, and assert from structured logs that playback completed without a faulted session:
+
+```powershell
+cd apps/windows-host
+powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -DeviceId 1 -DurationSeconds 10
+```
+
+Useful smoke-script options:
+
+- `-Mode WaveOut` runs the real playback path and requires `audio_output_started` plus completed playback frames.
+- `-Mode DebugDrain` runs the fallback sink and still validates host startup, sender completion, and stream stats.
+- `-Port 43000` uses a non-default port if you need to avoid a conflict.
+- `-TargetLatencyMs 60` lets you exercise a smaller playback target.
+
+Artifacts are written under `artifacts\phase2-smoke\`:
+
+- `host-*.log`: structured host log captured during the run
+- `sender-*.log`: debug sender output
+- `summary-*.json`: parsed acceptance summary with frame counts and playback stats
