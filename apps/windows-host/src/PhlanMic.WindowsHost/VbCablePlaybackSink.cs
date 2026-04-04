@@ -265,6 +265,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
             startedAtUtc = DateTimeOffset.UtcNow;
             lastPaddingFrames = bufferFrameCapacity;
         }
+        var robustness = pipeline.GetRobustnessSnapshot();
 
         logger.Info("audio_output_started", "VB-CABLE playback started.", new Dictionary<string, object?>
         {
@@ -273,7 +274,11 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
             ["captureEndpointId"] = selectedPair.CaptureEndpoint.Id,
             ["captureEndpointName"] = selectedPair.CaptureEndpoint.FriendlyName,
             ["outputFormat"] = DescribeFormat(outputFormat),
-            ["bufferCount"] = bufferCount
+            ["bufferCount"] = bufferCount,
+            ["streamRobustnessState"] = robustness.State.ToString(),
+            ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
+            ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
+            ["targetBufferedFrames"] = robustness.TargetBufferedFrames
         });
 
         return true;

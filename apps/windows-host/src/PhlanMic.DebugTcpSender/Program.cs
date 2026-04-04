@@ -42,6 +42,8 @@ try
     var framesSent = 0L;
     var bytesSent = 0L;
     var startedAtUtc = DateTimeOffset.UtcNow;
+    var delayPatternIndex = 0;
+    var pauseCompleted = false;
 
     while (!cancellation.Token.IsCancellationRequested &&
            (options.FrameCount == 0 || framesSent < options.FrameCount))
@@ -56,9 +58,23 @@ try
             Console.WriteLine($"Sent {framesSent} frames ({bytesSent} bytes).");
         }
 
-        if (options.DelayMs > 0)
+        if (!pauseCompleted &&
+            options.PauseAfterFrames > 0 &&
+            framesSent == options.PauseAfterFrames &&
+            options.PauseDurationMs > 0)
         {
-            await Task.Delay(options.DelayMs, cancellation.Token);
+            Console.WriteLine($"Pausing for {options.PauseDurationMs} ms after {framesSent} frames.");
+            await Task.Delay(options.PauseDurationMs, cancellation.Token);
+            pauseCompleted = true;
+        }
+
+        var delayMs = options.DelayPatternMs.Count > 0
+            ? options.DelayPatternMs[delayPatternIndex++ % options.DelayPatternMs.Count]
+            : options.DelayMs;
+
+        if (delayMs > 0)
+        {
+            await Task.Delay(delayMs, cancellation.Token);
         }
     }
 

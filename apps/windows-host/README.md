@@ -111,7 +111,7 @@ dotnet run --project src/PhlanMic.WindowsHost
 
 Phase 2 smoke harness:
 
-Run the Windows-only smoke script to start the host, wait for `host_ready`, stream a fixed-duration sine signal, and assert from structured logs that playback started and completed without a faulted session:
+Run the Windows-only smoke script to start the host, wait for `host_ready`, stream a fixed-duration test signal, and assert from structured logs that playback started, robustness counters were emitted, and the session completed without a faulted host state:
 
 ```powershell
 cd apps/windows-host
@@ -123,13 +123,35 @@ Useful smoke-script options:
 - `-Mode WaveOut` runs the real playback path and requires `audio_output_started` plus completed playback frames.
 - `-Mode DebugDrain` runs the fallback sink and still validates host startup, sender completion, and stream stats.
 - `-Mode VbCable` runs the endpoint-bound VB-CABLE path and validates the selected endpoint ids in the `audio_output_summary` event.
+- `-Scenario Baseline|Pause|Burst|Reconnect` selects the sender behavior and the corresponding robustness assertions.
 - `-EndpointId "{0.0.0.00000000}.{render-endpoint-guid}"` forces a specific VB-CABLE render endpoint when auto-detection is ambiguous.
 - `-Port 43000` uses a non-default port if you need to avoid a conflict.
 - `-TargetLatencyMs 60` lets you exercise a smaller playback target.
+- `-StartupPrebufferFrames 4 -TargetBufferedFrames 3 -MaxLateFrameToleranceFrames 2` overrides the host robustness config for tuning passes.
+- `-SenderDelayMs 20` controls baseline sender cadence.
+- `-DelayPatternMs "10,30"` drives the `Burst` scenario with a cyclic sender delay pattern.
+- `-PauseAfterFrames 100 -PauseDurationMs 200` drives the `Pause` scenario without disconnecting the TCP sender.
+- `-ReconnectPauseMs 300` controls the gap between sender runs in the `Reconnect` scenario.
 - `-DrainAfterSendMs 250` controls how long the script waits after the sender exits before stopping the host.
+
+Phase 4 smoke assertions now include:
+
+- startup playback only after the configured startup prebuffer is reached
+- presence of robustness fields in `stream_stats` and `audio_output_summary`
+- scenario-specific checks for concealment, degradation, or reconnect counts
+- continued rejection of faulted-session and startup-failure outcomes
+
+Examples:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -Mode VbCable -Scenario Baseline -DurationSeconds 10
+powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -Mode VbCable -Scenario Pause -PauseDurationMs 200
+powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -Mode VbCable -Scenario Burst -DelayPatternMs "10,30"
+powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -Mode VbCable -Scenario Reconnect -ReconnectPauseMs 300
+```
 
 Artifacts are written under `artifacts\phase2-smoke\`:
 
 - `host-*.stdout.log` / `host-*.stderr.log`: host output captured during the run
-- `sender-*.stdout.log` / `sender-*.stderr.log`: debug sender output
-- `summary-*.json`: parsed acceptance summary derived from exact `audio_output_summary` host events, including disconnect/shutdown counters
+- `sender-*.stdout.log` / `sender-*.stderr.log`: debug sender output for each scenario run
+- `summary-*.json`: parsed acceptance summary derived from exact `audio_output_summary` host events, including robustness counters and sender-run metadata

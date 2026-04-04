@@ -256,13 +256,18 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
 
         started = true;
         startedAtUtc = DateTimeOffset.UtcNow;
+        var robustness = pipeline.GetRobustnessSnapshot();
 
         logger.Info("audio_output_started", "waveOut playback started.", new Dictionary<string, object?>
         {
             ["deviceId"] = config.DeviceId,
             ["deviceName"] = selectedDevice?.Name ?? "System Default (WAVE_MAPPER)",
             ["outputFormat"] = DescribeFormat(outputFormat),
-            ["bufferCount"] = bufferCount
+            ["bufferCount"] = bufferCount,
+            ["streamRobustnessState"] = robustness.State.ToString(),
+            ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
+            ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
+            ["targetBufferedFrames"] = robustness.TargetBufferedFrames
         });
     }
 
