@@ -101,6 +101,6 @@ Useful smoke-script options:
 
 Artifacts are written under `artifacts\phase2-smoke\`:
 
-- `host-*.log`: structured host log captured during the run
-- `sender-*.log`: debug sender output
+- `host-*.stdout.log` / `host-*.stderr.log`: host output captured during the run
+- `sender-*.stdout.log` / `sender-*.stderr.log`: debug sender output
 - `summary-*.json`: parsed acceptance summary with frame counts and playback stats
