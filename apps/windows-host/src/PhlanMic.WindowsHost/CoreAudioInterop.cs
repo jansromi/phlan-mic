@@ -49,6 +49,24 @@ internal static class CoreAudioInterop
             ? Marshal.PtrToStringUni(value.pointerValue)
             : null;
 
+    public static string? TryConvertPropVariantToString(ref PROPVARIANT value)
+    {
+        var hresult = PropVariantToStringAlloc(ref value, out var stringPointer);
+        if (hresult < 0 || stringPointer == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            return Marshal.PtrToStringUni(stringPointer);
+        }
+        finally
+        {
+            CoTaskMemFree(stringPointer);
+        }
+    }
+
     public static void ClearPropVariant(ref PROPVARIANT value)
     {
         if (value.vt != 0)
@@ -70,6 +88,9 @@ internal static class CoreAudioInterop
 
     [DllImport("ole32.dll")]
     private static extern int PropVariantClear(ref PROPVARIANT value);
+
+    [DllImport("propsys.dll", CharSet = CharSet.Unicode)]
+    private static extern int PropVariantToStringAlloc(ref PROPVARIANT value, out IntPtr stringPointer);
 
     internal enum EDataFlow
     {

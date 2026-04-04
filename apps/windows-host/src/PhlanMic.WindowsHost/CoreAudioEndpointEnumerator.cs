@@ -164,16 +164,26 @@ internal static class CoreAudioEndpointEnumerator
         CoreAudioInterop.PROPERTYKEY propertyKey)
     {
         CoreAudioInterop.PROPVARIANT propertyValue = default;
+        var gotValue = false;
 
         try
         {
             var lookupKey = propertyKey;
             var hresult = propertyStore.GetValue(ref lookupKey, out propertyValue);
-            return hresult >= 0 ? CoreAudioInterop.PropVariantToString(propertyValue) : null;
+            if (hresult < 0)
+            {
+                return null;
+            }
+
+            gotValue = true;
+            return CoreAudioInterop.TryConvertPropVariantToString(ref propertyValue);
         }
         finally
         {
-            CoreAudioInterop.ClearPropVariant(ref propertyValue);
+            if (gotValue)
+            {
+                CoreAudioInterop.ClearPropVariant(ref propertyValue);
+            }
         }
     }
 }
