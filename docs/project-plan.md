@@ -1,17 +1,5 @@
 # Project Plan
 
-## Vision
-
-Make an iPhone or iPad behave like a wireless microphone for Windows games, chat apps, and recording tools on the same LAN.
-
-The user experience should be:
-
-1. Install the Windows app.
-2. Install the iPhone/iPad app.
-3. Open both.
-4. Pair once.
-5. Select the new microphone in Discord, a game, OBS, or any other app.
-
 ## Hard Truth Up Front
 
 Streaming microphone audio from iOS to Windows is very feasible.
@@ -29,6 +17,7 @@ Because of that, the project should be split into an MVP and a later product-gra
 
 - iOS app captures microphone audio and streams it to the PC.
 - Windows server receives audio, decodes it, and outputs it into an existing virtual audio device.
+- VB-CABLE is the chosen virtual audio device for the MVP path.
 - The installer either:
   - bundles a signed third-party virtual audio device, or
   - requires the user to install one supported virtual audio device separately.
@@ -81,6 +70,10 @@ Recommended stack:
 
 - .NET 8 desktop app for the server UI and app lifecycle
 - Native audio/network helper only if latency or driver integration demands it
+
+Current recommendation:
+
+- Use .NET 8 for the MVP unless a strong Rust-specific requirement appears during the spike.
 
 Core modules:
 
@@ -148,6 +141,8 @@ Fallback debug mode:
 
 That is useful early in development, but it should not be the long-term transport path.
 
+For the first end-to-end prototype, manual server IP entry is acceptable and preferred over adding Bonjour immediately.
+
 ### Jitter Strategy
 
 Start simple:
@@ -175,6 +170,8 @@ iPhone/iPad:
 4. Discover server automatically or let user enter IP
 5. Pair
 6. Start streaming
+
+For MVP, the app may remain in the foreground while streaming.
 
 ### Regular Use
 
@@ -229,6 +226,7 @@ Deliverables:
 - Manual IP/session connect
 - Raw PCM transport for initial debugging
 - Basic audio statistics
+- Debug playback to a normal Windows output device before VB-CABLE integration
 
 Exit criteria:
 
@@ -276,7 +274,7 @@ Make Windows apps see the stream as a microphone.
 
 Deliverables:
 
-- Output adapter for the chosen virtual audio path
+- Output adapter for VB-CABLE
 - Device setup checks
 - Basic troubleshooting UI
 
@@ -348,19 +346,27 @@ Build the smallest vertical slice that proves the project is real:
 
 1. Windows receiver app with a debug audio playback target
 2. iOS app that captures mic audio and streams raw PCM to manual IP
-3. Replace playback target with the chosen virtual audio path
+3. Replace playback target with VB-CABLE
 4. Only after that, add Opus, discovery, and pairing polish
 
 This order keeps the hardest unknowns visible early.
 
-## Open Decisions
+## MVP Decisions
 
-These are the decisions we should make next:
+The following MVP decisions are now in place:
 
-1. Do we accept an external virtual audio device for MVP?
-2. Do we want the Windows server in .NET or Rust?
-3. Do we want manual IP first, or Bonjour discovery from day one?
-4. Is foreground-only streaming on iOS acceptable for MVP?
+1. We accept an external virtual audio device for MVP and will use VB-CABLE first.
+2. We will start with manual server IP entry and defer Bonjour discovery until after the core audio path is proven.
+3. Foreground-only streaming on iOS is acceptable for MVP, but the app structure should remain easy to refactor if background behavior becomes a later requirement.
+
+The remaining implementation decision to confirm is:
+
+1. Should the Windows server MVP be implemented in .NET 8 or Rust?
+
+Current recommendation:
+
+- Use .NET 8 for the Windows server MVP because the main risk is virtual audio integration, not raw systems performance.
+- Keep the code modular so a future native or Rust component can be introduced if performance or device integration later demands it.
 
 ## Notes From Platform Docs
 
@@ -394,7 +400,7 @@ The two most relevant candidates today are VB-CABLE and Virtual Audio Cable (VAC
 
 ## Recommendation: VB-CABLE vs VAC
 
-For the first working version, prefer VB-CABLE.
+For the first working version, use VB-CABLE.
 
 Reasons:
 

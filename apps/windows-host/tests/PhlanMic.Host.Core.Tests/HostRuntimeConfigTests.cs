@@ -1,0 +1,29 @@
+using PhlanMic.Host.Core;
+
+namespace PhlanMic.Host.Core.Tests;
+
+public sealed class HostRuntimeConfigTests
+{
+    [Fact]
+    public void ValidateAcceptsDefaultConfiguration()
+    {
+        var config = new HostRuntimeConfig();
+
+        config.Validate();
+    }
+
+    [Fact]
+    public void ValidateRejectsOutOfRangePort()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Receiver = new ReceiverConfig
+            {
+                Port = 70_000
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("port", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+}

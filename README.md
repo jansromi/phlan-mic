@@ -12,4 +12,4 @@ The system has two parts:
 ## Current Status
 
 This repository is in planning mode. The first architecture and milestone draft lives in [docs/project-plan.md](docs/project-plan.md).
-
+The Windows host task breakdown lives in [docs/windows-host-tasks.md](docs/windows-host-tasks.md).
