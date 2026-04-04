@@ -267,7 +267,8 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
             ["streamRobustnessState"] = robustness.State.ToString(),
             ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
             ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
-            ["targetBufferedFrames"] = robustness.TargetBufferedFrames
+            ["targetBufferedFrames"] = robustness.TargetBufferedFrames,
+            ["missingFrameGraceMs"] = robustness.MissingFrameGraceMs
         });
     }
 
@@ -334,8 +335,10 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
         out DateTimeOffset? capturedAtUtc,
         out bool isSilence)
     {
-        if (pipeline.TryRead(out var frame, allowConcealment: true))
+        var readResult = pipeline.Read(allowConcealment: true);
+        if (readResult.Status is AudioReadStatus.FrameAvailable)
         {
+            var frame = readResult.Frame;
             var outputFrame = formatConversionActive
                 ? Pcm16AudioFrameConverter.ConvertFrame(frame!, outputFormat)
                 : frame!;
@@ -345,6 +348,15 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
             capturedAtUtc = outputFrame.CapturedAtUtc;
             isSilence = false;
             return true;
+        }
+
+        if (allowSilence && readResult.Status is AudioReadStatus.WaitingForFrame)
+        {
+            payload = Array.Empty<byte>();
+            sequenceNumber = null;
+            capturedAtUtc = null;
+            isSilence = false;
+            return false;
         }
 
         if (allowSilence)

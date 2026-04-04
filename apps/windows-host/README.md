@@ -127,7 +127,7 @@ Useful smoke-script options:
 - `-EndpointId "{0.0.0.00000000}.{render-endpoint-guid}"` forces a specific VB-CABLE render endpoint when auto-detection is ambiguous.
 - `-Port 43000` uses a non-default port if you need to avoid a conflict.
 - `-TargetLatencyMs 60` lets you exercise a smaller playback target.
-- `-StartupPrebufferFrames 4 -TargetBufferedFrames 3 -MaxLateFrameToleranceFrames 2` overrides the host robustness config for tuning passes.
+- `-StartupPrebufferFrames 4 -TargetBufferedFrames 3 -MaxLateFrameToleranceFrames 2 -MissingFrameGraceMs 20` overrides the host robustness config for tuning passes.
 - `-SenderDelayMs 20` controls baseline sender cadence.
 - `-DelayPatternMs "10,30"` drives the `Burst` scenario with a cyclic sender delay pattern.
 - `-PauseAfterFrames 100 -PauseDurationMs 200` drives the `Pause` scenario without disconnecting the TCP sender.

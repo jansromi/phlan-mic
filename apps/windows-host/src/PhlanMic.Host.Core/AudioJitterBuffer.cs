@@ -5,6 +5,7 @@ public sealed class AudioJitterBuffer
     private readonly AudioFormat expectedFormat;
     private readonly StreamBufferConfig bufferConfig;
     private readonly StreamRobustnessConfig robustnessConfig;
+    private readonly TimeProvider timeProvider;
     private readonly SortedDictionary<long, AudioFrame> bufferedFrames = new();
     private readonly object gate = new();
     private long acceptedFrames;
@@ -19,12 +20,14 @@ public sealed class AudioJitterBuffer
     private long? expectedNextSequence;
     private long? highestReceivedSequence;
     private long? activeGapEndSequenceExclusive;
+    private DateTimeOffset? nextPlayoutDueAtUtc;
     private StreamRobustnessState state = StreamRobustnessState.Buffering;
 
     public AudioJitterBuffer(
         AudioFormat expectedFormat,
         StreamBufferConfig bufferConfig,
-        StreamRobustnessConfig robustnessConfig)
+        StreamRobustnessConfig robustnessConfig,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(expectedFormat);
         ArgumentNullException.ThrowIfNull(bufferConfig);
@@ -37,6 +40,7 @@ public sealed class AudioJitterBuffer
         this.expectedFormat = expectedFormat;
         this.bufferConfig = bufferConfig;
         this.robustnessConfig = robustnessConfig;
+        this.timeProvider = timeProvider ?? TimeProvider.System;
     }
 
     public long AcceptedFrames
@@ -149,18 +153,18 @@ public sealed class AudioJitterBuffer
         }
     }
 
-    public bool TryRead(out AudioFrame? frame, bool allowConcealment)
+    public AudioReadResult Read(bool allowConcealment)
     {
         lock (gate)
         {
-            frame = null;
+            var now = timeProvider.GetUtcNow();
 
             if (expectedNextSequence is null)
             {
                 if (bufferedFrames.Count < robustnessConfig.StartupPrebufferFrames)
                 {
                     state = StreamRobustnessState.Buffering;
-                    return false;
+                    return new AudioReadResult(AudioReadStatus.WaitingForFrame, null, bufferedFrames.Count);
                 }
 
                 expectedNextSequence = bufferedFrames.First().Key;
@@ -171,6 +175,7 @@ public sealed class AudioJitterBuffer
             {
                 bufferedFrames.Remove(expectedNextSequence.Value);
                 expectedNextSequence++;
+                AdvancePlayoutScheduleLocked(now);
 
                 if (activeGapEndSequenceExclusive is not null &&
                     expectedNextSequence >= activeGapEndSequenceExclusive)
@@ -179,14 +184,13 @@ public sealed class AudioJitterBuffer
                 }
 
                 state = StreamRobustnessState.Streaming;
-                frame = bufferedFrame;
-                return true;
+                return new AudioReadResult(AudioReadStatus.FrameAvailable, bufferedFrame, bufferedFrames.Count);
             }
 
             if (!allowConcealment || !robustnessConfig.ConcealMissingFramesWithSilence)
             {
                 state = StreamRobustnessState.Buffering;
-                return false;
+                return new AudioReadResult(AudioReadStatus.WaitingForFrame, null, bufferedFrames.Count);
             }
 
             if (bufferedFrames.Count > 0)
@@ -195,19 +199,24 @@ public sealed class AudioJitterBuffer
                 var gapSize = checked((int)Math.Min(int.MaxValue, nextAvailableSequence - expectedNextSequence.Value));
 
                 if (gapSize <= robustnessConfig.MaxLateFrameToleranceFrames &&
-                    bufferedFrames.Count < robustnessConfig.TargetBufferedFrames)
+                    bufferedFrames.Count < robustnessConfig.TargetBufferedFrames &&
+                    !HasMissedFrameDeadlineLocked(now))
                 {
                     state = StreamRobustnessState.Buffering;
                     return false;
                 }
 
                 RegisterGap(nextAvailableSequence, gapSize);
-                frame = CreateConcealedFrameLocked();
-                return true;
+                return new AudioReadResult(AudioReadStatus.FrameAvailable, CreateConcealedFrameLocked(now), bufferedFrames.Count);
+            }
+
+            if (HasMissedFrameDeadlineLocked(now))
+            {
+                return new AudioReadResult(AudioReadStatus.FrameAvailable, CreateConcealedFrameLocked(now), bufferedFrames.Count);
             }
 
             state = StreamRobustnessState.Buffering;
-            return false;
+            return new AudioReadResult(AudioReadStatus.WaitingForFrame, null, bufferedFrames.Count);
         }
     }
 
@@ -229,6 +238,7 @@ public sealed class AudioJitterBuffer
                 robustnessConfig.StartupPrebufferFrames,
                 robustnessConfig.TargetBufferedFrames,
                 robustnessConfig.MaxLateFrameToleranceFrames,
+                robustnessConfig.MissingFrameGraceMs,
                 bufferedFrames.Count * expectedFormat.FrameDurationMs);
         }
     }
@@ -241,6 +251,7 @@ public sealed class AudioJitterBuffer
             expectedNextSequence = null;
             highestReceivedSequence = null;
             activeGapEndSequenceExclusive = null;
+            nextPlayoutDueAtUtc = null;
             state = StreamRobustnessState.Buffering;
         }
     }
@@ -259,15 +270,27 @@ public sealed class AudioJitterBuffer
         activeGapEndSequenceExclusive = nextAvailableSequence;
     }
 
-    private AudioFrame CreateConcealedFrameLocked()
+    private bool HasMissedFrameDeadlineLocked(DateTimeOffset now) =>
+        nextPlayoutDueAtUtc is not null &&
+        now >= nextPlayoutDueAtUtc.Value.AddMilliseconds(robustnessConfig.MissingFrameGraceMs);
+
+    private void AdvancePlayoutScheduleLocked(DateTimeOffset now)
+    {
+        nextPlayoutDueAtUtc = nextPlayoutDueAtUtc is null
+            ? now + expectedFormat.FrameDuration
+            : nextPlayoutDueAtUtc.Value + expectedFormat.FrameDuration;
+    }
+
+    private AudioFrame CreateConcealedFrameLocked(DateTimeOffset now)
     {
         var concealedFrame = new AudioFrame(
             expectedNextSequence!.Value,
             expectedFormat,
             new byte[expectedFormat.BytesPerFrame],
-            DateTimeOffset.UtcNow);
+            now);
 
         expectedNextSequence++;
+        AdvancePlayoutScheduleLocked(now);
         missingFramesDetected++;
         silenceFramesInserted++;
         state = StreamRobustnessState.Degraded;

@@ -43,6 +43,7 @@ internal sealed class HostConfigLoader
         var startupPrebufferFrames = ParseInt("ROBUSTNESS__STARTUPPREBUFFERFRAMES") ?? config.Robustness.StartupPrebufferFrames;
         var targetBufferedFrames = ParseInt("ROBUSTNESS__TARGETBUFFEREDFRAMES") ?? config.Robustness.TargetBufferedFrames;
         var maxLateFrameToleranceFrames = ParseInt("ROBUSTNESS__MAXLATEFRAMETOLERANCEFRAMES") ?? config.Robustness.MaxLateFrameToleranceFrames;
+        var missingFrameGraceMs = ParseInt("ROBUSTNESS__MISSINGFRAMEGRACEMS") ?? config.Robustness.MissingFrameGraceMs;
         var concealMissingFramesWithSilence = ParseBool("ROBUSTNESS__CONCEALMISSINGFRAMESWITHSILENCE") ?? config.Robustness.ConcealMissingFramesWithSilence;
         var sampleRate = ParseInt("AUDIOFORMAT__SAMPLERATE") ?? config.AudioFormat.SampleRate;
         var channels = ParseInt("AUDIOFORMAT__CHANNELS") ?? config.AudioFormat.Channels;
@@ -77,6 +78,7 @@ internal sealed class HostConfigLoader
                 StartupPrebufferFrames = startupPrebufferFrames,
                 TargetBufferedFrames = targetBufferedFrames,
                 MaxLateFrameToleranceFrames = maxLateFrameToleranceFrames,
+                MissingFrameGraceMs = missingFrameGraceMs,
                 ConcealMissingFramesWithSilence = concealMissingFramesWithSilence
             },
             AudioFormat = config.AudioFormat with

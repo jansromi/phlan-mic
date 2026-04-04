@@ -7,7 +7,8 @@ public sealed class AudioStreamPipeline
     public AudioStreamPipeline(
         AudioFormat expectedFormat,
         StreamBufferConfig bufferConfig,
-        StreamRobustnessConfig robustnessConfig)
+        StreamRobustnessConfig robustnessConfig,
+        TimeProvider? timeProvider = null)
     {
         ArgumentNullException.ThrowIfNull(expectedFormat);
         ArgumentNullException.ThrowIfNull(bufferConfig);
@@ -20,7 +21,7 @@ public sealed class AudioStreamPipeline
         ExpectedFormat = expectedFormat;
         BufferConfig = bufferConfig;
         RobustnessConfig = robustnessConfig;
-        jitterBuffer = new AudioJitterBuffer(expectedFormat, bufferConfig, robustnessConfig);
+        jitterBuffer = new AudioJitterBuffer(expectedFormat, bufferConfig, robustnessConfig, timeProvider);
     }
 
     public AudioFormat ExpectedFormat { get; }
@@ -43,8 +44,15 @@ public sealed class AudioStreamPipeline
         return jitterBuffer.Write(frame);
     }
 
-    public bool TryRead(out AudioFrame? frame, bool allowConcealment = false) =>
-        jitterBuffer.TryRead(out frame, allowConcealment);
+    public AudioReadResult Read(bool allowConcealment = false) =>
+        jitterBuffer.Read(allowConcealment);
+
+    public bool TryRead(out AudioFrame? frame, bool allowConcealment = false)
+    {
+        var result = Read(allowConcealment);
+        frame = result.Frame;
+        return result.Status is AudioReadStatus.FrameAvailable;
+    }
 
     public StreamRobustnessSnapshot GetRobustnessSnapshot() => jitterBuffer.GetSnapshot();
 

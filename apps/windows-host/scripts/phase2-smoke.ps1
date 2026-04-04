@@ -18,6 +18,7 @@ param(
     [int]$StartupPrebufferFrames = 4,
     [int]$TargetBufferedFrames = 3,
     [int]$MaxLateFrameToleranceFrames = 2,
+    [int]$MissingFrameGraceMs = 20,
     [bool]$ConcealMissingFramesWithSilence = $true,
     [string]$HostProject = "src/PhlanMic.WindowsHost",
     [string]$SenderProject = "src/PhlanMic.DebugTcpSender"
@@ -61,6 +62,10 @@ if ($MaxLateFrameToleranceFrames -lt 0) {
     throw "MaxLateFrameToleranceFrames must be zero or greater."
 }
 
+if ($MissingFrameGraceMs -lt 0) {
+    throw "MissingFrameGraceMs must be zero or greater."
+}
+
 $root = Split-Path -Parent $PSScriptRoot
 $artifactsDir = Join-Path $root "artifacts\phase2-smoke"
 New-Item -ItemType Directory -Force -Path $artifactsDir | Out-Null
@@ -84,6 +89,7 @@ $env:PHLANMIC__OUTPUT__LOGENDPOINTINVENTORY = "true"
 $env:PHLANMIC__ROBUSTNESS__STARTUPPREBUFFERFRAMES = "$StartupPrebufferFrames"
 $env:PHLANMIC__ROBUSTNESS__TARGETBUFFEREDFRAMES = "$TargetBufferedFrames"
 $env:PHLANMIC__ROBUSTNESS__MAXLATEFRAMETOLERANCEFRAMES = "$MaxLateFrameToleranceFrames"
+$env:PHLANMIC__ROBUSTNESS__MISSINGFRAMEGRACEMS = "$MissingFrameGraceMs"
 $env:PHLANMIC__ROBUSTNESS__CONCEALMISSINGFRAMESWITHSILENCE = $ConcealMissingFramesWithSilence.ToString().ToLowerInvariant()
 
 if ([string]::IsNullOrWhiteSpace($EndpointId)) {
@@ -397,6 +403,7 @@ try {
         "startupPrebufferFrames",
         "targetBufferedFrames",
         "maxLateFrameToleranceFrames",
+        "missingFrameGraceMs",
         "hostEstimatedBufferLatencyMs"
     )
     Assert-EventHasProperties -Event $latestStreamStats -PropertyNames $requiredRobustnessProperties -Context "latest stream_stats event"
@@ -408,11 +415,13 @@ try {
             "streamRobustnessState",
             "currentPrebufferDepth",
             "startupPrebufferFrames",
-            "targetBufferedFrames"
+            "targetBufferedFrames",
+            "missingFrameGraceMs"
         ) -Context "audio_output_started event"
 
         $startedPrebufferTarget = [int](Get-PropertyValue -Event $firstOutputStarted -Name "startupPrebufferFrames")
         $startedTargetBufferedFrames = [int](Get-PropertyValue -Event $firstOutputStarted -Name "targetBufferedFrames")
+        $startedMissingFrameGraceMs = [int](Get-PropertyValue -Event $firstOutputStarted -Name "missingFrameGraceMs")
         $startedRobustnessState = [string](Get-PropertyValue -Event $firstOutputStarted -Name "streamRobustnessState")
 
         if ($startedPrebufferTarget -ne $StartupPrebufferFrames) {
@@ -421,6 +430,10 @@ try {
 
         if ($startedTargetBufferedFrames -ne $TargetBufferedFrames) {
             throw "audio_output_started reported target buffered frames $startedTargetBufferedFrames, expected $TargetBufferedFrames. See $hostStdoutLog and $hostStderrLog"
+        }
+
+        if ($startedMissingFrameGraceMs -ne $MissingFrameGraceMs) {
+            throw "audio_output_started reported missing frame grace $startedMissingFrameGraceMs, expected $MissingFrameGraceMs. See $hostStdoutLog and $hostStderrLog"
         }
 
         if ($startedRobustnessState -ne "Streaming") {
@@ -474,9 +487,8 @@ try {
             }
         }
         "Pause" {
-            $summaryUnderrunCount = [int64](Get-PropertyValue -Event $summaryEvent -Name "underrunCount")
-            if ($summaryHostSilenceFramesInserted -le 0 -and $summaryMissingFramesDetected -le 0 -and $summaryUnderrunCount -le 0) {
-                throw "Pause scenario did not produce concealment or underrun evidence. See $hostStdoutLog and $hostStderrLog"
+            if ($summaryHostSilenceFramesInserted -le 0 -and $summaryMissingFramesDetected -le 0) {
+                throw "Pause scenario did not produce host-side concealment counters. See $hostStdoutLog and $hostStderrLog"
             }
         }
         "Burst" {
@@ -510,6 +522,7 @@ try {
     $summaryOutputCaptureEndpointId = [string](Get-PropertyValue -Event $summaryEvent -Name "outputCaptureEndpointId")
     $summaryOutputCaptureEndpointName = [string](Get-PropertyValue -Event $summaryEvent -Name "outputCaptureEndpointName")
     $summaryOutputFormat = [string](Get-PropertyValue -Event $summaryEvent -Name "outputFormat")
+    $summaryMissingFrameGraceMs = [int](Get-PropertyValue -Event $summaryEvent -Name "missingFrameGraceMs")
     $disconnectSummaryTimestampUtc = if ($null -ne $disconnectSummary) { Get-EventTimestampUtc -Event $disconnectSummary } else { $null }
     $shutdownSummaryTimestampUtc = if ($null -ne $shutdownSummary) { Get-EventTimestampUtc -Event $shutdownSummary } else { $null }
     $senderRunsArray = $senderRuns.ToArray()
@@ -531,6 +544,7 @@ try {
         startupPrebufferFrames = $StartupPrebufferFrames
         targetBufferedFrames = $TargetBufferedFrames
         maxLateFrameToleranceFrames = $MaxLateFrameToleranceFrames
+        missingFrameGraceMs = $MissingFrameGraceMs
         concealMissingFramesWithSilence = $ConcealMissingFramesWithSilence
         framesSent = $framesToSend
         acceptedFrames = $acceptedFrames
@@ -551,6 +565,7 @@ try {
         currentPrebufferDepth = $summaryCurrentPrebufferDepth
         largestObservedGap = $summaryLargestObservedGap
         hostEstimatedBufferLatencyMs = $summaryHostEstimatedBufferLatencyMs
+        configuredMissingFrameGraceMs = $summaryMissingFrameGraceMs
         estimatedLatencyMs = $summaryEstimatedLatencyMs
         glitchRatePerMinute = $summaryGlitchRatePerMinute
         connectionCount = $summaryConnectionCount

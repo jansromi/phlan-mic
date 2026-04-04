@@ -278,7 +278,8 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
             ["streamRobustnessState"] = robustness.State.ToString(),
             ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
             ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
-            ["targetBufferedFrames"] = robustness.TargetBufferedFrames
+            ["targetBufferedFrames"] = robustness.TargetBufferedFrames,
+            ["missingFrameGraceMs"] = robustness.MissingFrameGraceMs
         });
 
         return true;
@@ -386,8 +387,10 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
 
     private bool TryCreateOutputFrameLocked(bool allowSilence)
     {
-        if (pipeline.TryRead(out var frame, allowConcealment: true))
+        var readResult = pipeline.Read(allowConcealment: true);
+        if (readResult.Status is AudioReadStatus.FrameAvailable)
         {
+            var frame = readResult.Frame;
             var outputFrame = formatConversionActive
                 ? Pcm16AudioFrameConverter.ConvertFrame(frame!, outputFormat)
                 : frame!;
@@ -398,6 +401,11 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
                 outputFrame.CapturedAtUtc,
                 isSilence: false);
             return true;
+        }
+
+        if (allowSilence && readResult.Status is AudioReadStatus.WaitingForFrame)
+        {
+            return false;
         }
 
         if (!allowSilence)

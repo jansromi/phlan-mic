@@ -142,4 +142,19 @@ public sealed class HostRuntimeConfigTests
         var exception = Assert.Throws<InvalidOperationException>(config.Validate);
         Assert.Contains("target buffered", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ValidateRejectsNegativeMissingFrameGrace()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Robustness = new StreamRobustnessConfig
+            {
+                MissingFrameGraceMs = -1
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("missing frame grace", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

@@ -52,6 +52,7 @@ internal sealed class WindowsHostApp
             ["startupPrebufferFrames"] = config.Robustness.StartupPrebufferFrames,
             ["targetBufferedFrames"] = config.Robustness.TargetBufferedFrames,
             ["maxLateFrameToleranceFrames"] = config.Robustness.MaxLateFrameToleranceFrames,
+            ["missingFrameGraceMs"] = config.Robustness.MissingFrameGraceMs,
             ["concealMissingFramesWithSilence"] = config.Robustness.ConcealMissingFramesWithSilence,
             ["generatedSignalTestMode"] = config.TestMode.Enabled
         });
@@ -234,6 +235,7 @@ internal sealed class WindowsHostApp
                     ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
                     ["targetBufferedFrames"] = robustness.TargetBufferedFrames,
                     ["maxLateFrameToleranceFrames"] = robustness.MaxLateFrameToleranceFrames,
+                    ["missingFrameGraceMs"] = robustness.MissingFrameGraceMs,
                     ["hostEstimatedBufferLatencyMs"] = robustness.EstimatedBufferLatencyMs,
                     ["lastActivityUtc"] = stats.LastActivityUtc,
                     ["outputSink"] = outputSnapshot.SinkKind,
@@ -393,6 +395,7 @@ internal sealed class WindowsHostApp
             ["startupPrebufferFrames"] = inputStats.Robustness.StartupPrebufferFrames,
             ["targetBufferedFrames"] = inputStats.Robustness.TargetBufferedFrames,
             ["maxLateFrameToleranceFrames"] = inputStats.Robustness.MaxLateFrameToleranceFrames,
+            ["missingFrameGraceMs"] = inputStats.Robustness.MissingFrameGraceMs,
             ["hostEstimatedBufferLatencyMs"] = inputStats.Robustness.EstimatedBufferLatencyMs,
             ["outputSink"] = outputStats.SinkKind,
             ["outputDeviceId"] = outputStats.DeviceId,

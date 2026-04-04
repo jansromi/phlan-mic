@@ -14,4 +14,5 @@ public sealed record StreamRobustnessSnapshot(
     int StartupPrebufferFrames,
     int TargetBufferedFrames,
     int MaxLateFrameToleranceFrames,
+    int MissingFrameGraceMs,
     int EstimatedBufferLatencyMs);

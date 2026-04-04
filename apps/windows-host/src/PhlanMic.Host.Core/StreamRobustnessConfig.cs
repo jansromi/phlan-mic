@@ -8,6 +8,8 @@ public sealed record StreamRobustnessConfig
 
     public int MaxLateFrameToleranceFrames { get; init; } = 2;
 
+    public int MissingFrameGraceMs { get; init; } = 20;
+
     public bool ConcealMissingFramesWithSilence { get; init; } = true;
 
     public void Validate(StreamBufferConfig bufferConfig)
@@ -27,6 +29,11 @@ public sealed record StreamRobustnessConfig
         if (MaxLateFrameToleranceFrames < 0)
         {
             throw new InvalidOperationException("Max late frame tolerance must be zero or greater.");
+        }
+
+        if (MissingFrameGraceMs < 0)
+        {
+            throw new InvalidOperationException("Missing frame grace must be zero or greater.");
         }
 
         if (StartupPrebufferFrames > bufferConfig.MaxBufferedFrames)
