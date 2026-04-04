@@ -495,6 +495,25 @@ try {
         }
     }
 
+    $summaryUnderrunCount = [int64](Get-PropertyValue -Event $summaryEvent -Name "underrunCount")
+    $summarySinkSilenceFramesInserted = [int64](Get-PropertyValue -Event $summaryEvent -Name "silenceFramesInserted")
+    $summaryLateFramesArrived = [int64](Get-PropertyValue -Event $summaryEvent -Name "lateFramesArrived")
+    $summaryStreamRobustnessState = [string](Get-PropertyValue -Event $summaryEvent -Name "streamRobustnessState")
+    $summaryCurrentPrebufferDepth = [int](Get-PropertyValue -Event $summaryEvent -Name "currentPrebufferDepth")
+    $summaryLargestObservedGap = [int](Get-PropertyValue -Event $summaryEvent -Name "largestObservedGap")
+    $summaryHostEstimatedBufferLatencyMs = [double](Get-PropertyValue -Event $summaryEvent -Name "hostEstimatedBufferLatencyMs")
+    $summaryEstimatedLatencyMs = [double](Get-PropertyValue -Event $summaryEvent -Name "estimatedLatencyMs")
+    $summaryGlitchRatePerMinute = [double](Get-PropertyValue -Event $summaryEvent -Name "glitchRatePerMinute")
+    $summaryOutputSink = [string](Get-PropertyValue -Event $summaryEvent -Name "outputSink")
+    $summaryOutputDeviceName = [string](Get-PropertyValue -Event $summaryEvent -Name "outputDeviceName")
+    $summaryOutputEndpointId = [string](Get-PropertyValue -Event $summaryEvent -Name "outputEndpointId")
+    $summaryOutputCaptureEndpointId = [string](Get-PropertyValue -Event $summaryEvent -Name "outputCaptureEndpointId")
+    $summaryOutputCaptureEndpointName = [string](Get-PropertyValue -Event $summaryEvent -Name "outputCaptureEndpointName")
+    $summaryOutputFormat = [string](Get-PropertyValue -Event $summaryEvent -Name "outputFormat")
+    $disconnectSummaryTimestampUtc = if ($null -ne $disconnectSummary) { Get-EventTimestampUtc -Event $disconnectSummary } else { $null }
+    $shutdownSummaryTimestampUtc = if ($null -ne $shutdownSummary) { Get-EventTimestampUtc -Event $shutdownSummary } else { $null }
+    $senderRunsArray = @($senderRuns)
+
     $summary = [ordered]@{
         scenario = $Scenario
         mode = $Mode
@@ -514,7 +533,6 @@ try {
         maxLateFrameToleranceFrames = $MaxLateFrameToleranceFrames
         concealMissingFramesWithSilence = $ConcealMissingFramesWithSilence
         framesSent = $framesToSend
-        senderRuns = @($senderRuns)
         acceptedFrames = $acceptedFrames
         completedFrames = $completedFrames
         activeWindowAcceptedFrames = $activeWindowAcceptedFrames
@@ -522,34 +540,35 @@ try {
         activeWindowCompletionRatio = $activeWindowCompletionRatio
         activeWindowUnderrunCount = $activeWindowUnderrunCount
         postDisconnectUnderrunCount = $postDisconnectUnderrunCount
-        underrunCount = [int64](Get-PropertyValue -Event $summaryEvent -Name "underrunCount")
-        sinkSilenceFramesInserted = [int64](Get-PropertyValue -Event $summaryEvent -Name "silenceFramesInserted")
+        underrunCount = $summaryUnderrunCount
+        sinkSilenceFramesInserted = $summarySinkSilenceFramesInserted
         hostSilenceFramesInserted = $summaryHostSilenceFramesInserted
         missingFramesDetected = $summaryMissingFramesDetected
         lateFramesDropped = $summaryLateFramesDropped
-        lateFramesArrived = [int64](Get-PropertyValue -Event $summaryEvent -Name "lateFramesArrived")
+        lateFramesArrived = $summaryLateFramesArrived
         sequenceGapsObserved = $summarySequenceGapsObserved
-        streamRobustnessState = Get-PropertyValue -Event $summaryEvent -Name "streamRobustnessState"
-        currentPrebufferDepth = [int](Get-PropertyValue -Event $summaryEvent -Name "currentPrebufferDepth")
-        largestObservedGap = [int](Get-PropertyValue -Event $summaryEvent -Name "largestObservedGap")
-        hostEstimatedBufferLatencyMs = [double](Get-PropertyValue -Event $summaryEvent -Name "hostEstimatedBufferLatencyMs")
-        estimatedLatencyMs = [double](Get-PropertyValue -Event $summaryEvent -Name "estimatedLatencyMs")
-        glitchRatePerMinute = [double](Get-PropertyValue -Event $summaryEvent -Name "glitchRatePerMinute")
+        streamRobustnessState = $summaryStreamRobustnessState
+        currentPrebufferDepth = $summaryCurrentPrebufferDepth
+        largestObservedGap = $summaryLargestObservedGap
+        hostEstimatedBufferLatencyMs = $summaryHostEstimatedBufferLatencyMs
+        estimatedLatencyMs = $summaryEstimatedLatencyMs
+        glitchRatePerMinute = $summaryGlitchRatePerMinute
         connectionCount = $summaryConnectionCount
         streamBufferDegradedCount = $streamBufferDegradedCount
-        outputSink = Get-PropertyValue -Event $summaryEvent -Name "outputSink"
-        outputDeviceName = Get-PropertyValue -Event $summaryEvent -Name "outputDeviceName"
-        outputEndpointId = Get-PropertyValue -Event $summaryEvent -Name "outputEndpointId"
-        outputCaptureEndpointId = Get-PropertyValue -Event $summaryEvent -Name "outputCaptureEndpointId"
-        outputCaptureEndpointName = Get-PropertyValue -Event $summaryEvent -Name "outputCaptureEndpointName"
-        outputFormat = Get-PropertyValue -Event $summaryEvent -Name "outputFormat"
+        outputSink = $summaryOutputSink
+        outputDeviceName = $summaryOutputDeviceName
+        outputEndpointId = $summaryOutputEndpointId
+        outputCaptureEndpointId = $summaryOutputCaptureEndpointId
+        outputCaptureEndpointName = $summaryOutputCaptureEndpointName
+        outputFormat = $summaryOutputFormat
         disconnectObservedAtUtc = $disconnectObservedAtUtc
-        disconnectSummaryTimestampUtc = if ($null -ne $disconnectSummary) { Get-EventTimestampUtc -Event $disconnectSummary } else { $null }
-        shutdownSummaryTimestampUtc = if ($null -ne $shutdownSummary) { Get-EventTimestampUtc -Event $shutdownSummary } else { $null }
+        disconnectSummaryTimestampUtc = $disconnectSummaryTimestampUtc
+        shutdownSummaryTimestampUtc = $shutdownSummaryTimestampUtc
         faultCount = $faultCount
         hostStartFailures = $hostStartFailures
         hostStdoutLog = $hostStdoutLog
         hostStderrLog = $hostStderrLog
+        senderRuns = $senderRunsArray
     }
 
     $summary | ConvertTo-Json -Depth 6 | Set-Content -Path $summaryPath
