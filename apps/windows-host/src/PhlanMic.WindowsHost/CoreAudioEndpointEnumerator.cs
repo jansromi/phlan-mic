@@ -1,5 +1,4 @@
 using Windows.Win32;
-using Windows.Win32.Devices.FunctionDiscovery;
 using Windows.Win32.Media.Audio;
 using Windows.Win32.System.Com;
 using Windows.Win32.System.Com.StructuredStorage;
