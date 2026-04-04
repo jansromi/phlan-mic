@@ -85,7 +85,7 @@ $env:PHLANMIC__OUTPUT__TARGETLATENCYMS = "60"
 
 Phase 2 smoke harness:
 
-Run the Windows-only smoke script to start the host, wait for playback startup, stream a fixed-duration sine signal, and assert from structured logs that playback completed without a faulted session:
+Run the Windows-only smoke script to start the host, wait for `host_ready`, stream a fixed-duration sine signal, and assert from structured logs that playback started and completed without a faulted session:
 
 ```powershell
 cd apps/windows-host

@@ -94,7 +94,7 @@ try {
         -PassThru
 
     $startupDeadline = (Get-Date).AddSeconds(20)
-    $playbackStarted = $false
+    $hostReady = $false
 
     while ((Get-Date) -lt $startupDeadline) {
         if ($hostProcess.HasExited) {
@@ -107,16 +107,16 @@ try {
             throw "Host failed during startup. See $hostStdoutLog and $hostStderrLog"
         }
 
-        if ($events | Where-Object { $_.event -eq "audio_output_started" }) {
-            $playbackStarted = $true
+        if ($events | Where-Object { $_.event -eq "host_ready" }) {
+            $hostReady = $true
             break
         }
 
         Start-Sleep -Milliseconds 250
     }
 
-    if (-not $playbackStarted) {
-        throw "Timed out waiting for audio_output_started. See $hostStdoutLog and $hostStderrLog"
+    if (-not $hostReady) {
+        throw "Timed out waiting for host_ready. See $hostStdoutLog and $hostStderrLog"
     }
 
     $senderProcess = Start-Process `
@@ -159,6 +159,10 @@ try {
 
     if ($events | Where-Object { $_.event -eq "host_start_failed" }) {
         throw "Host startup failure was logged. See $hostStdoutLog and $hostStderrLog"
+    }
+
+    if ($Mode -eq "WaveOut" -and -not ($events | Where-Object { $_.event -eq "audio_output_started" })) {
+        throw "Playback never started. Expected audio_output_started after frames were sent. See $hostStdoutLog and $hostStderrLog"
     }
 
     $statsEvent = $events |
