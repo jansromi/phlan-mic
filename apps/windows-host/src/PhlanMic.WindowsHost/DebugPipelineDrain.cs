@@ -3,6 +3,7 @@ using PhlanMic.Host.Core;
 namespace PhlanMic.WindowsHost;
 
 internal sealed class DebugPipelineDrain
+    : IAudioOutputSink
 {
     private static readonly TimeSpan EmptyPollDelay = TimeSpan.FromMilliseconds(5);
     private readonly AudioStreamPipeline pipeline;
@@ -18,16 +19,30 @@ internal sealed class DebugPipelineDrain
         this.pipeline = pipeline;
     }
 
-    public DebugPipelineDrainSnapshot GetSnapshot()
+    public AudioOutputSnapshot GetSnapshot()
     {
         lock (gate)
         {
-            return new DebugPipelineDrainSnapshot(
-                drainedFrames,
-                drainedBytes,
-                lastSequenceNumber,
-                lastFrameCapturedAtUtc,
-                lastDrainedAtUtc);
+            return new AudioOutputSnapshot(
+                SinkKind: "DebugDrain",
+                DeviceId: null,
+                DeviceName: null,
+                OutputFormat: "DrainOnly",
+                FormatConversionActive: false,
+                BufferCount: 0,
+                BufferedFrames: pipeline.BufferedFrameCount,
+                SubmittedFrames: drainedFrames,
+                CompletedFrames: drainedFrames,
+                CompletedBytes: drainedBytes,
+                SilenceFramesInserted: 0,
+                UnderrunCount: 0,
+                EstimatedLatencyMs: 0,
+                GlitchRatePerMinute: 0,
+                LastSequenceNumber: lastSequenceNumber,
+                StartedAtUtc: null,
+                LastFrameCapturedAtUtc: lastFrameCapturedAtUtc,
+                LastSubmittedAtUtc: lastDrainedAtUtc,
+                LastCompletedAtUtc: lastDrainedAtUtc);
         }
     }
 
@@ -66,5 +81,9 @@ internal sealed class DebugPipelineDrain
             lastFrameCapturedAtUtc = frame.CapturedAtUtc;
             lastDrainedAtUtc = DateTimeOffset.UtcNow;
         }
+    }
+
+    public void Dispose()
+    {
     }
 }

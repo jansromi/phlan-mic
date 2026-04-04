@@ -14,6 +14,8 @@ public sealed record HostRuntimeConfig
 
     public GeneratedSignalTestModeConfig TestMode { get; init; } = new();
 
+    public OutputConfig Output { get; init; } = new();
+
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(SessionName))
@@ -30,6 +32,6 @@ public sealed record HostRuntimeConfig
         Buffer.Validate();
         AudioFormat.Validate();
         TestMode.Validate();
+        Output.Validate();
     }
 }
-

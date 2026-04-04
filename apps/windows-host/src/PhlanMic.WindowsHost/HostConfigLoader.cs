@@ -46,6 +46,10 @@ internal sealed class HostConfigLoader
         var frameDurationMs = ParseInt("AUDIOFORMAT__FRAMEDURATIONMS") ?? config.AudioFormat.FrameDurationMs;
         var testModeEnabled = ParseBool("TESTMODE__ENABLED") ?? config.TestMode.Enabled;
         var signalFrequencyHz = ParseInt("TESTMODE__SIGNALFREQUENCYHZ") ?? config.TestMode.SignalFrequencyHz;
+        var outputMode = GetEnvironmentValue("OUTPUT__MODE") ?? config.Output.Mode;
+        var outputDeviceId = ParseInt("OUTPUT__DEVICEID") ?? config.Output.DeviceId;
+        var outputTargetLatencyMs = ParseInt("OUTPUT__TARGETLATENCYMS") ?? config.Output.TargetLatencyMs;
+        var logAvailableDevices = ParseBool("OUTPUT__LOGAVAILABLEDEVICES") ?? config.Output.LogAvailableDevices;
 
         return config with
         {
@@ -73,6 +77,13 @@ internal sealed class HostConfigLoader
             {
                 Enabled = testModeEnabled,
                 SignalFrequencyHz = signalFrequencyHz
+            },
+            Output = config.Output with
+            {
+                Mode = outputMode,
+                DeviceId = outputDeviceId,
+                TargetLatencyMs = outputTargetLatencyMs,
+                LogAvailableDevices = logAvailableDevices
             }
         };
     }

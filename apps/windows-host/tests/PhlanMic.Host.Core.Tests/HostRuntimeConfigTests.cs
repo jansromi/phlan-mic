@@ -41,4 +41,19 @@ public sealed class HostRuntimeConfigTests
         var exception = Assert.Throws<InvalidOperationException>(config.Validate);
         Assert.Contains("transport mode", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ValidateRejectsUnsupportedOutputMode()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Output = new OutputConfig
+            {
+                Mode = "Wasapi"
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("output mode", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

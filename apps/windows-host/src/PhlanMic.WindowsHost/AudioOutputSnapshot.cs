@@ -1,0 +1,22 @@
+namespace PhlanMic.WindowsHost;
+
+internal sealed record AudioOutputSnapshot(
+    string SinkKind,
+    int? DeviceId,
+    string? DeviceName,
+    string OutputFormat,
+    bool FormatConversionActive,
+    int BufferCount,
+    int BufferedFrames,
+    long SubmittedFrames,
+    long CompletedFrames,
+    long CompletedBytes,
+    long SilenceFramesInserted,
+    long UnderrunCount,
+    double EstimatedLatencyMs,
+    double GlitchRatePerMinute,
+    long? LastSequenceNumber,
+    DateTimeOffset? StartedAtUtc,
+    DateTimeOffset? LastFrameCapturedAtUtc,
+    DateTimeOffset? LastSubmittedAtUtc,
+    DateTimeOffset? LastCompletedAtUtc);

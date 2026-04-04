@@ -23,7 +23,8 @@ internal sealed class WindowsHostApp
 
         var pipeline = new AudioStreamPipeline(config.AudioFormat, config.Buffer);
         var inputSource = CreateInputSource(pipeline);
-        var drain = new DebugPipelineDrain(pipeline);
+        using var outputSink = CreateOutputSink(pipeline);
+        var outputSnapshot = outputSink.GetSnapshot();
         inputSource.SessionChanged += (_, snapshot) => LogSessionSnapshot(snapshot);
 
         logger.Info("host_ready", "Windows host foundation is ready.", new Dictionary<string, object?>
@@ -33,6 +34,14 @@ internal sealed class WindowsHostApp
             ["port"] = config.Receiver.Port,
             ["transportMode"] = config.Receiver.TransportMode,
             ["inputSource"] = inputSource.GetType().Name,
+            ["outputMode"] = config.Output.Mode,
+            ["outputSink"] = outputSnapshot.SinkKind,
+            ["outputDeviceId"] = outputSnapshot.DeviceId,
+            ["outputDeviceName"] = outputSnapshot.DeviceName,
+            ["outputFormat"] = outputSnapshot.OutputFormat,
+            ["formatConversionActive"] = outputSnapshot.FormatConversionActive,
+            ["outputBufferCount"] = outputSnapshot.BufferCount,
+            ["outputTargetLatencyMs"] = config.Output.TargetLatencyMs,
             ["audioFormat"] = $"{config.AudioFormat.SampleRate}Hz/{config.AudioFormat.Channels}ch/{config.AudioFormat.BitsPerSample}bit/{config.AudioFormat.FrameDurationMs}ms",
             ["bufferedFrames"] = pipeline.BufferedFrameCount,
             ["bufferCapacity"] = config.Buffer.MaxBufferedFrames,
@@ -41,12 +50,13 @@ internal sealed class WindowsHostApp
 
         using var runtimeCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var inputTask = inputSource.RunAsync(runtimeCancellation.Token);
-        var drainTask = drain.RunAsync(runtimeCancellation.Token);
-        var statsTask = LogStatsLoopAsync(inputSource, drain, runtimeCancellation.Token);
+        var outputTask = outputSink.RunAsync(runtimeCancellation.Token);
+        var statsTask = LogStatsLoopAsync(inputSource, outputSink, runtimeCancellation.Token);
 
         try
         {
-            await inputTask;
+            var completedTask = await Task.WhenAny(inputTask, outputTask, statsTask);
+            await completedTask;
         }
         finally
         {
@@ -56,7 +66,7 @@ internal sealed class WindowsHostApp
             }
         }
 
-        await Task.WhenAll(drainTask, statsTask);
+        await Task.WhenAll(inputTask, outputTask, statsTask);
         logger.Info("host_shutdown", "Host shutdown requested.");
     }
 
@@ -65,19 +75,32 @@ internal sealed class WindowsHostApp
             ? new GeneratedSignalTestSource(config.AudioFormat, config.TestMode, pipeline)
             : new DebugTcpRawPcmReceiver(config.Receiver, config.AudioFormat, pipeline);
 
+    private IAudioOutputSink CreateOutputSink(AudioStreamPipeline pipeline)
+    {
+        if (string.Equals(config.Output.Mode, OutputConfig.DebugDrainMode, StringComparison.OrdinalIgnoreCase))
+        {
+            return new DebugPipelineDrain(pipeline);
+        }
+
+        return new WaveOutPlaybackSink(logger, pipeline, config.AudioFormat, config.Output);
+    }
+
     private async Task LogStatsLoopAsync(
         IAudioInputSource inputSource,
-        DebugPipelineDrain drain,
+        IAudioOutputSink outputSink,
         CancellationToken cancellationToken)
     {
         using var timer = new PeriodicTimer(StatsLogInterval);
+        long lastDroppedFrames = 0;
+        long lastRejectedFrames = 0;
+        long lastUnderrunCount = 0;
 
         try
         {
             while (await timer.WaitForNextTickAsync(cancellationToken))
             {
                 var stats = inputSource.GetStatisticsSnapshot();
-                var drainSnapshot = drain.GetSnapshot();
+                var outputSnapshot = outputSink.GetSnapshot();
                 logger.Info("stream_stats", "Stream statistics updated.", new Dictionary<string, object?>
                 {
                     ["bytesReceived"] = stats.BytesReceived,
@@ -88,12 +111,50 @@ internal sealed class WindowsHostApp
                     ["droppedFrames"] = stats.DroppedFrames,
                     ["bufferedFrames"] = stats.BufferedFrameCount,
                     ["lastActivityUtc"] = stats.LastActivityUtc,
-                    ["drainedFrames"] = drainSnapshot.DrainedFrames,
-                    ["drainedBytes"] = drainSnapshot.DrainedBytes,
-                    ["lastDrainedSequenceNumber"] = drainSnapshot.LastSequenceNumber,
-                    ["lastFrameCapturedAtUtc"] = drainSnapshot.LastFrameCapturedAtUtc,
-                    ["lastFrameDrainedAtUtc"] = drainSnapshot.LastDrainedAtUtc
+                    ["outputSink"] = outputSnapshot.SinkKind,
+                    ["outputDeviceId"] = outputSnapshot.DeviceId,
+                    ["outputDeviceName"] = outputSnapshot.DeviceName,
+                    ["outputFormat"] = outputSnapshot.OutputFormat,
+                    ["outputBufferCount"] = outputSnapshot.BufferCount,
+                    ["outputBufferedFrames"] = outputSnapshot.BufferedFrames,
+                    ["outputSubmittedFrames"] = outputSnapshot.SubmittedFrames,
+                    ["outputCompletedFrames"] = outputSnapshot.CompletedFrames,
+                    ["outputCompletedBytes"] = outputSnapshot.CompletedBytes,
+                    ["silenceFramesInserted"] = outputSnapshot.SilenceFramesInserted,
+                    ["underrunCount"] = outputSnapshot.UnderrunCount,
+                    ["estimatedLatencyMs"] = outputSnapshot.EstimatedLatencyMs,
+                    ["glitchRatePerMinute"] = outputSnapshot.GlitchRatePerMinute,
+                    ["lastOutputSequenceNumber"] = outputSnapshot.LastSequenceNumber,
+                    ["lastFrameCapturedAtUtc"] = outputSnapshot.LastFrameCapturedAtUtc,
+                    ["lastFrameSubmittedAtUtc"] = outputSnapshot.LastSubmittedAtUtc,
+                    ["lastFrameCompletedAtUtc"] = outputSnapshot.LastCompletedAtUtc
                 });
+
+                if (stats.DroppedFrames > lastDroppedFrames || stats.RejectedFrames > lastRejectedFrames)
+                {
+                    logger.Warning("audio_output_overrun", "Input buffering dropped or rejected frames before playback.", new Dictionary<string, object?>
+                    {
+                        ["droppedFrames"] = stats.DroppedFrames,
+                        ["rejectedFrames"] = stats.RejectedFrames,
+                        ["bufferedFrames"] = stats.BufferedFrameCount,
+                        ["bufferCapacity"] = config.Buffer.MaxBufferedFrames
+                    });
+                }
+
+                if (outputSnapshot.UnderrunCount > lastUnderrunCount)
+                {
+                    logger.Warning("audio_output_underrun", "Playback inserted silence because audio frames were not available in time.", new Dictionary<string, object?>
+                    {
+                        ["underrunCount"] = outputSnapshot.UnderrunCount,
+                        ["silenceFramesInserted"] = outputSnapshot.SilenceFramesInserted,
+                        ["estimatedLatencyMs"] = outputSnapshot.EstimatedLatencyMs,
+                        ["glitchRatePerMinute"] = outputSnapshot.GlitchRatePerMinute
+                    });
+                }
+
+                lastDroppedFrames = stats.DroppedFrames;
+                lastRejectedFrames = stats.RejectedFrames;
+                lastUnderrunCount = outputSnapshot.UnderrunCount;
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

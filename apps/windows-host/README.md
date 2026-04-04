@@ -51,3 +51,34 @@ Expected host behavior:
 - Session transitions through `Listening`, `Connected`, `Streaming`, `Disconnected`, then back to `Listening`.
 - `bytesReceived`, `framesReceived`, `acceptedFrames`, `drainedFrames`, and `drainedBytes` increase during the run.
 - `bufferedFrames` should stay low because the temporary debug drain continuously reads from the pipeline.
+
+Phase 2 local playback test on Windows:
+
+1. Start the host with speaker playback enabled:
+
+```powershell
+cd apps/windows-host
+dotnet run --project src/PhlanMic.WindowsHost
+```
+
+2. In a second terminal, stream debug audio:
+
+```powershell
+cd apps/windows-host
+dotnet run --project src/PhlanMic.DebugTcpSender -- --host 127.0.0.1 --port 42100 --frames 500 --mode sine
+```
+
+Expected host behavior:
+
+- Startup logs enumerate available `waveOut` devices and show the selected device id and negotiated output format.
+- The incoming sine stream should play through the selected speaker/headphone device.
+- `outputSubmittedFrames`, `outputCompletedFrames`, `estimatedLatencyMs`, and `glitchRatePerMinute` update in the periodic stats logs.
+- `audio_output_underrun` and `audio_output_overrun` warnings should only appear when the pipeline starves or overfills.
+
+Useful environment overrides:
+
+```powershell
+$env:PHLANMIC__OUTPUT__MODE = "DebugDrain"
+$env:PHLANMIC__OUTPUT__DEVICEID = "1"
+$env:PHLANMIC__OUTPUT__TARGETLATENCYMS = "60"
+```
