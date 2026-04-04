@@ -119,13 +119,13 @@ internal static class CoreAudioInterop
         public readonly uint pid;
     }
 
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Sequential)]
     internal struct PROPVARIANT
     {
-        [FieldOffset(0)]
         public ushort vt;
-
-        [FieldOffset(8)]
+        public ushort wReserved1;
+        public ushort wReserved2;
+        public ushort wReserved3;
         public IntPtr pointerValue;
     }
 
