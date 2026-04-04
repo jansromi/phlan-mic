@@ -48,8 +48,10 @@ internal sealed class HostConfigLoader
         var signalFrequencyHz = ParseInt("TESTMODE__SIGNALFREQUENCYHZ") ?? config.TestMode.SignalFrequencyHz;
         var outputMode = GetEnvironmentValue("OUTPUT__MODE") ?? config.Output.Mode;
         var outputDeviceId = ParseInt("OUTPUT__DEVICEID") ?? config.Output.DeviceId;
+        var outputEndpointId = GetEnvironmentValue("OUTPUT__ENDPOINTID") ?? config.Output.EndpointId;
         var outputTargetLatencyMs = ParseInt("OUTPUT__TARGETLATENCYMS") ?? config.Output.TargetLatencyMs;
         var logAvailableDevices = ParseBool("OUTPUT__LOGAVAILABLEDEVICES") ?? config.Output.LogAvailableDevices;
+        var logEndpointInventory = ParseBool("OUTPUT__LOGENDPOINTINVENTORY") ?? config.Output.LogEndpointInventory;
 
         return config with
         {
@@ -82,8 +84,10 @@ internal sealed class HostConfigLoader
             {
                 Mode = outputMode,
                 DeviceId = outputDeviceId,
+                EndpointId = outputEndpointId,
                 TargetLatencyMs = outputTargetLatencyMs,
-                LogAvailableDevices = logAvailableDevices
+                LogAvailableDevices = logAvailableDevices,
+                LogEndpointInventory = logEndpointInventory
             }
         };
     }

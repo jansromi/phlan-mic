@@ -56,4 +56,51 @@ public sealed class HostRuntimeConfigTests
         var exception = Assert.Throws<InvalidOperationException>(config.Validate);
         Assert.Contains("output mode", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ValidateAcceptsVbCableModeWithEndpointOverride()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Output = new OutputConfig
+            {
+                Mode = OutputConfig.VbCableMode,
+                EndpointId = "{vb-cable-render-endpoint}"
+            }
+        };
+
+        config.Validate();
+    }
+
+    [Fact]
+    public void ValidateRejectsWaveOutDeviceIdOutsideWaveOutMode()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Output = new OutputConfig
+            {
+                Mode = OutputConfig.VbCableMode,
+                DeviceId = 1
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("device id", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidateRejectsEndpointOverrideOutsideVbCableMode()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Output = new OutputConfig
+            {
+                Mode = OutputConfig.WaveOutMode,
+                EndpointId = "{not-valid-for-waveout}"
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("endpoint id", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

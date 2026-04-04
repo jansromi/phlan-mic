@@ -80,7 +80,33 @@ Useful environment overrides:
 ```powershell
 $env:PHLANMIC__OUTPUT__MODE = "DebugDrain"
 $env:PHLANMIC__OUTPUT__DEVICEID = "1"
+$env:PHLANMIC__OUTPUT__ENDPOINTID = "{0.0.0.00000000}.{example-endpoint-guid}"
 $env:PHLANMIC__OUTPUT__TARGETLATENCYMS = "60"
+```
+
+Phase 3 VB-CABLE mode:
+
+1. Install VB-CABLE on Windows.
+2. Start the host in `VbCable` mode:
+
+```powershell
+cd apps/windows-host
+$env:PHLANMIC__OUTPUT__MODE = "VbCable"
+dotnet run --project src/PhlanMic.WindowsHost
+```
+
+Expected startup behavior:
+
+- Startup logs emit `audio_endpoint_inventory` with Windows Core Audio render/capture endpoint ids, names, state, and default-role flags.
+- If exactly one usable VB-CABLE pair is found, the host logs `vb_cable_endpoint_selected` and `audio_output_selected` with the selected render/capture endpoint ids.
+- If VB-CABLE is missing, disabled, or ambiguous, startup fails with an actionable error explaining what to install, enable, or override.
+
+If automatic matching is ambiguous, set an explicit render endpoint id:
+
+```powershell
+$env:PHLANMIC__OUTPUT__MODE = "VbCable"
+$env:PHLANMIC__OUTPUT__ENDPOINTID = "{0.0.0.00000000}.{render-endpoint-guid}"
+dotnet run --project src/PhlanMic.WindowsHost
 ```
 
 Phase 2 smoke harness:
@@ -96,6 +122,8 @@ Useful smoke-script options:
 
 - `-Mode WaveOut` runs the real playback path and requires `audio_output_started` plus completed playback frames.
 - `-Mode DebugDrain` runs the fallback sink and still validates host startup, sender completion, and stream stats.
+- `-Mode VbCable` runs the endpoint-bound VB-CABLE path and validates the selected endpoint ids in the `audio_output_summary` event.
+- `-EndpointId "{0.0.0.00000000}.{render-endpoint-guid}"` forces a specific VB-CABLE render endpoint when auto-detection is ambiguous.
 - `-Port 43000` uses a non-default port if you need to avoid a conflict.
 - `-TargetLatencyMs 60` lets you exercise a smaller playback target.
 - `-DrainAfterSendMs 250` controls how long the script waits after the sender exits before stopping the host.

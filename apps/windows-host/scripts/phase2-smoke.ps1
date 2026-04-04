@@ -1,7 +1,8 @@
 param(
     [int]$DeviceId = -1,
-    [ValidateSet("WaveOut", "DebugDrain")]
+    [ValidateSet("WaveOut", "DebugDrain", "VbCable")]
     [string]$Mode = "WaveOut",
+    [string]$EndpointId = "",
     [int]$DurationSeconds = 10,
     [int]$DrainAfterSendMs = 250,
     [int]$Port = 42100,
@@ -50,6 +51,14 @@ $env:PHLANMIC__OUTPUT__MODE = $Mode
 $env:PHLANMIC__OUTPUT__DEVICEID = "$DeviceId"
 $env:PHLANMIC__OUTPUT__TARGETLATENCYMS = "$TargetLatencyMs"
 $env:PHLANMIC__OUTPUT__LOGAVAILABLEDEVICES = "true"
+$env:PHLANMIC__OUTPUT__LOGENDPOINTINVENTORY = "true"
+
+if ([string]::IsNullOrWhiteSpace($EndpointId)) {
+    Remove-Item Env:PHLANMIC__OUTPUT__ENDPOINTID -ErrorAction SilentlyContinue
+}
+else {
+    $env:PHLANMIC__OUTPUT__ENDPOINTID = $EndpointId
+}
 
 $hostProcess = $null
 
@@ -198,7 +207,7 @@ try {
         throw "Host startup failure was logged. See $hostStdoutLog and $hostStderrLog"
     }
 
-    if ($Mode -eq "WaveOut" -and -not ($events | Where-Object { $_.event -eq "audio_output_started" })) {
+    if ($Mode -ne "DebugDrain" -and -not ($events | Where-Object { $_.event -eq "audio_output_started" })) {
         throw "Playback never started. Expected audio_output_started after frames were sent. See $hostStdoutLog and $hostStderrLog"
     }
 
@@ -231,13 +240,18 @@ try {
         throw "No completed playback frames were observed. See $hostStdoutLog and $hostStderrLog"
     }
 
-    if ($Mode -eq "WaveOut" -and $completedFrames -lt $completedThreshold) {
+    if ($Mode -ne "DebugDrain" -and $completedFrames -lt $completedThreshold) {
         throw "Completed playback frames $completedFrames were below the threshold $completedThreshold. See $hostStdoutLog and $hostStderrLog"
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($EndpointId) -and $summaryEvent.outputEndpointId -ne $EndpointId) {
+        throw "Expected outputEndpointId '$EndpointId' but saw '$($summaryEvent.outputEndpointId)'. See $hostStdoutLog and $hostStderrLog"
     }
 
     $summary = [ordered]@{
         mode = $Mode
         deviceId = $DeviceId
+        endpointId = $EndpointId
         port = $Port
         durationSeconds = $DurationSeconds
         drainAfterSendMs = $DrainAfterSendMs
@@ -256,7 +270,11 @@ try {
         silenceFramesInserted = [int64]$summaryEvent.silenceFramesInserted
         estimatedLatencyMs = [double]$summaryEvent.estimatedLatencyMs
         glitchRatePerMinute = [double]$summaryEvent.glitchRatePerMinute
+        outputSink = $summaryEvent.outputSink
         outputDeviceName = $summaryEvent.outputDeviceName
+        outputEndpointId = $summaryEvent.outputEndpointId
+        outputCaptureEndpointId = $summaryEvent.outputCaptureEndpointId
+        outputCaptureEndpointName = $summaryEvent.outputCaptureEndpointName
         outputFormat = $summaryEvent.outputFormat
         disconnectSummaryTimestampUtc = if ($null -ne $disconnectSummary) { Get-EventTimestampUtc -Event $disconnectSummary } else { $null }
         shutdownSummaryTimestampUtc = if ($null -ne $shutdownSummary) { Get-EventTimestampUtc -Event $shutdownSummary } else { $null }
