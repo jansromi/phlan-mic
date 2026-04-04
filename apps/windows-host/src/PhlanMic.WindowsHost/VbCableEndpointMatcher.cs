@@ -149,9 +149,9 @@ internal static class VbCableEndpointMatcher
 
         var pairs = (
                 from render in usableRenders
-                let renderFamilyKey = ExtractFamilyKey(render.FriendlyName)
+                let renderFamilyKey = ExtractFamilyKey(render.MatchText)
                 from capture in usableCaptures
-                let captureFamilyKey = ExtractFamilyKey(capture.FriendlyName)
+                let captureFamilyKey = ExtractFamilyKey(capture.MatchText)
                 where string.Equals(renderFamilyKey, captureFamilyKey, StringComparison.Ordinal)
                 select new VbCableEndpointPair(render, capture, "family-key"))
             .ToArray();
@@ -173,7 +173,7 @@ internal static class VbCableEndpointMatcher
             return false;
         }
 
-        var normalizedName = Normalize(endpoint.FriendlyName);
+        var normalizedName = Normalize(endpoint.MatchText);
         return IsVbCableLike(normalizedName) &&
                (normalizedName.Contains("cableinput", StringComparison.Ordinal) ||
                 !normalizedName.Contains("cableoutput", StringComparison.Ordinal));
@@ -186,7 +186,7 @@ internal static class VbCableEndpointMatcher
             return false;
         }
 
-        var normalizedName = Normalize(endpoint.FriendlyName);
+        var normalizedName = Normalize(endpoint.MatchText);
         return IsVbCableLike(normalizedName) &&
                (normalizedName.Contains("cableoutput", StringComparison.Ordinal) ||
                 !normalizedName.Contains("cableinput", StringComparison.Ordinal));

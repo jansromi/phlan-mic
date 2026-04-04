@@ -18,6 +18,7 @@ internal enum AudioEndpointState
 internal sealed record AudioEndpointInfo(
     string Id,
     string FriendlyName,
+    string MatchText,
     AudioEndpointFlow Flow,
     AudioEndpointState State,
     bool IsDefaultConsole,

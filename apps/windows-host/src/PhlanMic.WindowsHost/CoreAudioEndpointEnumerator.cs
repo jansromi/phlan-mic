@@ -111,7 +111,8 @@ internal static class CoreAudioEndpointEnumerator
                     endpoints.Add(
                         new AudioEndpointInfo(
                             endpointId,
-                            ReadFriendlyName(device) ?? endpointId,
+                            endpointId,
+                            endpointId,
                             flow,
                             (AudioEndpointState)endpointState,
                             IsDefault(defaultEndpoints, flow, CoreAudioInterop.ERole.eConsole, endpointId),
@@ -138,52 +139,4 @@ internal static class CoreAudioEndpointEnumerator
         defaultEndpoints.TryGetValue((flow, role), out var defaultEndpointId) &&
         string.Equals(defaultEndpointId, endpointId, StringComparison.Ordinal);
 
-    private static string? ReadFriendlyName(CoreAudioInterop.IMMDevice device)
-    {
-        CoreAudioInterop.IPropertyStore? propertyStore = null;
-
-        try
-        {
-            CoreAudioInterop.ThrowIfFailed(
-                device.OpenPropertyStore(CoreAudioInterop.StgmRead, out propertyStore),
-                "IMMDevice.OpenPropertyStore");
-
-            return
-                TryReadPropertyString(propertyStore, CoreAudioInterop.DeviceFriendlyNamePropertyKey) ??
-                TryReadPropertyString(propertyStore, CoreAudioInterop.DeviceDescriptionPropertyKey) ??
-                TryReadPropertyString(propertyStore, CoreAudioInterop.DeviceInterfaceFriendlyNamePropertyKey);
-        }
-        finally
-        {
-            CoreAudioInterop.ReleaseComObject(propertyStore);
-        }
-    }
-
-    private static string? TryReadPropertyString(
-        CoreAudioInterop.IPropertyStore propertyStore,
-        CoreAudioInterop.PROPERTYKEY propertyKey)
-    {
-        CoreAudioInterop.PROPVARIANT propertyValue = default;
-        var gotValue = false;
-
-        try
-        {
-            var lookupKey = propertyKey;
-            var hresult = propertyStore.GetValue(ref lookupKey, out propertyValue);
-            if (hresult < 0)
-            {
-                return null;
-            }
-
-            gotValue = true;
-            return CoreAudioInterop.TryConvertPropVariantToString(ref propertyValue);
-        }
-        finally
-        {
-            if (gotValue)
-            {
-                CoreAudioInterop.ClearPropVariant(ref propertyValue);
-            }
-        }
-    }
 }
