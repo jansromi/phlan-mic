@@ -89,6 +89,7 @@ public sealed class DebugTcpRawPcmReceiver : IAudioInputSource
     {
         var remoteEndpoint = client.Client.RemoteEndPoint?.ToString();
         var parser = new RawPcmFrameParser(format);
+        pipeline.ResetForNewStream();
         tracker.MarkConnected(remoteEndpoint, DateTimeOffset.UtcNow, "TCP client connected.");
 
         using var stream = client.GetStream();

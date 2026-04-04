@@ -2,55 +2,51 @@ namespace PhlanMic.Host.Core;
 
 public sealed class AudioStreamPipeline
 {
-    private readonly AudioFrameQueue queue;
+    private readonly AudioJitterBuffer jitterBuffer;
 
-    public AudioStreamPipeline(AudioFormat expectedFormat, StreamBufferConfig bufferConfig)
+    public AudioStreamPipeline(
+        AudioFormat expectedFormat,
+        StreamBufferConfig bufferConfig,
+        StreamRobustnessConfig robustnessConfig)
     {
         ArgumentNullException.ThrowIfNull(expectedFormat);
         ArgumentNullException.ThrowIfNull(bufferConfig);
+        ArgumentNullException.ThrowIfNull(robustnessConfig);
 
         expectedFormat.Validate();
         bufferConfig.Validate();
+        robustnessConfig.Validate(bufferConfig);
 
         ExpectedFormat = expectedFormat;
         BufferConfig = bufferConfig;
-        queue = new AudioFrameQueue(bufferConfig.MaxBufferedFrames);
+        RobustnessConfig = robustnessConfig;
+        jitterBuffer = new AudioJitterBuffer(expectedFormat, bufferConfig, robustnessConfig);
     }
 
     public AudioFormat ExpectedFormat { get; }
 
     public StreamBufferConfig BufferConfig { get; }
 
-    public long AcceptedFrames { get; private set; }
+    public StreamRobustnessConfig RobustnessConfig { get; }
 
-    public long RejectedFrames { get; private set; }
+    public long AcceptedFrames => jitterBuffer.AcceptedFrames;
 
-    public long DroppedFrames => queue.DroppedFrames;
+    public long RejectedFrames => jitterBuffer.RejectedFrames;
 
-    public int BufferedFrameCount => queue.Count;
+    public long DroppedFrames => jitterBuffer.DroppedFrames;
+
+    public int BufferedFrameCount => jitterBuffer.Count;
 
     public AudioEnqueueResult Write(AudioFrame frame)
     {
         ArgumentNullException.ThrowIfNull(frame);
-
-        if (frame.Format != ExpectedFormat)
-        {
-            RejectedFrames++;
-            return new AudioEnqueueResult(AudioEnqueueStatus.RejectedFormatMismatch, queue.Count);
-        }
-
-        var accepted = queue.TryEnqueue(frame, BufferConfig.DropOldestWhenFull, out var droppedOldest);
-        if (!accepted)
-        {
-            RejectedFrames++;
-            return new AudioEnqueueResult(AudioEnqueueStatus.RejectedBufferFull, queue.Count);
-        }
-
-        AcceptedFrames++;
-        return new AudioEnqueueResult(
-            droppedOldest ? AudioEnqueueStatus.AcceptedAfterDroppingOldest : AudioEnqueueStatus.Accepted,
-            queue.Count);
+        return jitterBuffer.Write(frame);
     }
 
-    public bool TryRead(out AudioFrame? frame) => queue.TryDequeue(out frame);
+    public bool TryRead(out AudioFrame? frame, bool allowConcealment = false) =>
+        jitterBuffer.TryRead(out frame, allowConcealment);
+
+    public StreamRobustnessSnapshot GetRobustnessSnapshot() => jitterBuffer.GetSnapshot();
+
+    public void ResetForNewStream() => jitterBuffer.ResetForNewStream();
 }

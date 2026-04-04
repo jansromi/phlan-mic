@@ -7,6 +7,7 @@ internal sealed class WindowsHostApp
     private static readonly TimeSpan StatsLogInterval = TimeSpan.FromSeconds(5);
     private readonly StructuredConsoleLogger logger;
     private readonly HostRuntimeConfig config;
+    private StreamRobustnessState? lastRobustnessState;
 
     public WindowsHostApp(StructuredConsoleLogger logger, HostRuntimeConfig config)
     {
@@ -21,7 +22,7 @@ internal sealed class WindowsHostApp
             logger.Warning("platform_check", "The host targets Windows and should be executed on a Windows machine.");
         }
 
-        var pipeline = new AudioStreamPipeline(config.AudioFormat, config.Buffer);
+        var pipeline = new AudioStreamPipeline(config.AudioFormat, config.Buffer, config.Robustness);
         var inputSource = CreateInputSource(pipeline);
         using var outputSink = CreateOutputSink(pipeline);
         var outputSnapshot = outputSink.GetSnapshot();
@@ -48,6 +49,10 @@ internal sealed class WindowsHostApp
             ["audioFormat"] = $"{config.AudioFormat.SampleRate}Hz/{config.AudioFormat.Channels}ch/{config.AudioFormat.BitsPerSample}bit/{config.AudioFormat.FrameDurationMs}ms",
             ["bufferedFrames"] = pipeline.BufferedFrameCount,
             ["bufferCapacity"] = config.Buffer.MaxBufferedFrames,
+            ["startupPrebufferFrames"] = config.Robustness.StartupPrebufferFrames,
+            ["targetBufferedFrames"] = config.Robustness.TargetBufferedFrames,
+            ["maxLateFrameToleranceFrames"] = config.Robustness.MaxLateFrameToleranceFrames,
+            ["concealMissingFramesWithSilence"] = config.Robustness.ConcealMissingFramesWithSilence,
             ["generatedSignalTestMode"] = config.TestMode.Enabled
         });
 
@@ -206,6 +211,7 @@ internal sealed class WindowsHostApp
             {
                 var stats = inputSource.GetStatisticsSnapshot();
                 var outputSnapshot = outputSink.GetSnapshot();
+                var robustness = stats.Robustness;
                 logger.Info("stream_stats", "Stream statistics updated.", new Dictionary<string, object?>
                 {
                     ["bytesReceived"] = stats.BytesReceived,
@@ -215,6 +221,20 @@ internal sealed class WindowsHostApp
                     ["rejectedFrames"] = stats.RejectedFrames,
                     ["droppedFrames"] = stats.DroppedFrames,
                     ["bufferedFrames"] = stats.BufferedFrameCount,
+                    ["streamRobustnessState"] = robustness.State.ToString(),
+                    ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                    ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                    ["sequenceGapsObserved"] = robustness.SequenceGapsObserved,
+                    ["lateFramesArrived"] = robustness.LateFramesArrived,
+                    ["lateFramesDropped"] = robustness.LateFramesDropped,
+                    ["missingFramesDetected"] = robustness.MissingFramesDetected,
+                    ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted,
+                    ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
+                    ["largestObservedGap"] = robustness.LargestObservedGap,
+                    ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
+                    ["targetBufferedFrames"] = robustness.TargetBufferedFrames,
+                    ["maxLateFrameToleranceFrames"] = robustness.MaxLateFrameToleranceFrames,
+                    ["hostEstimatedBufferLatencyMs"] = robustness.EstimatedBufferLatencyMs,
                     ["lastActivityUtc"] = stats.LastActivityUtc,
                     ["outputSink"] = outputSnapshot.SinkKind,
                     ["outputDeviceId"] = outputSnapshot.DeviceId,
@@ -237,6 +257,32 @@ internal sealed class WindowsHostApp
                     ["lastFrameSubmittedAtUtc"] = outputSnapshot.LastSubmittedAtUtc,
                     ["lastFrameCompletedAtUtc"] = outputSnapshot.LastCompletedAtUtc
                 });
+
+                if (lastRobustnessState != robustness.State)
+                {
+                    var properties = new Dictionary<string, object?>
+                    {
+                        ["previousState"] = lastRobustnessState?.ToString(),
+                        ["state"] = robustness.State.ToString(),
+                        ["bufferedFrames"] = stats.BufferedFrameCount,
+                        ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                        ["sequenceGapsObserved"] = robustness.SequenceGapsObserved,
+                        ["lateFramesDropped"] = robustness.LateFramesDropped,
+                        ["missingFramesDetected"] = robustness.MissingFramesDetected,
+                        ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted
+                    };
+
+                    if (robustness.State is StreamRobustnessState.Degraded)
+                    {
+                        logger.Warning("stream_buffer_degraded", "Host stream robustness entered a degraded state.", properties);
+                    }
+                    else
+                    {
+                        logger.Info("stream_buffer_state_changed", "Host stream robustness state changed.", properties);
+                    }
+
+                    lastRobustnessState = robustness.State;
+                }
 
                 if (stats.DroppedFrames > lastDroppedFrames || stats.RejectedFrames > lastRejectedFrames)
                 {
@@ -334,6 +380,20 @@ internal sealed class WindowsHostApp
             ["rejectedFrames"] = inputStats.RejectedFrames,
             ["droppedFrames"] = inputStats.DroppedFrames,
             ["bufferedFrames"] = inputStats.BufferedFrameCount,
+            ["streamRobustnessState"] = inputStats.Robustness.State.ToString(),
+            ["expectedNextSequence"] = inputStats.Robustness.ExpectedNextSequence,
+            ["highestReceivedSequence"] = inputStats.Robustness.HighestReceivedSequence,
+            ["sequenceGapsObserved"] = inputStats.Robustness.SequenceGapsObserved,
+            ["lateFramesArrived"] = inputStats.Robustness.LateFramesArrived,
+            ["lateFramesDropped"] = inputStats.Robustness.LateFramesDropped,
+            ["missingFramesDetected"] = inputStats.Robustness.MissingFramesDetected,
+            ["hostSilenceFramesInserted"] = inputStats.Robustness.SilenceFramesInserted,
+            ["currentPrebufferDepth"] = inputStats.Robustness.CurrentPrebufferDepth,
+            ["largestObservedGap"] = inputStats.Robustness.LargestObservedGap,
+            ["startupPrebufferFrames"] = inputStats.Robustness.StartupPrebufferFrames,
+            ["targetBufferedFrames"] = inputStats.Robustness.TargetBufferedFrames,
+            ["maxLateFrameToleranceFrames"] = inputStats.Robustness.MaxLateFrameToleranceFrames,
+            ["hostEstimatedBufferLatencyMs"] = inputStats.Robustness.EstimatedBufferLatencyMs,
             ["outputSink"] = outputStats.SinkKind,
             ["outputDeviceId"] = outputStats.DeviceId,
             ["outputDeviceName"] = outputStats.DeviceName,

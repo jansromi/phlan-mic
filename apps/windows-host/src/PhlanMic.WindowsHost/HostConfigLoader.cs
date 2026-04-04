@@ -40,6 +40,10 @@ internal sealed class HostConfigLoader
         var port = ParseInt("RECEIVER__PORT") ?? config.Receiver.Port;
         var maxBufferedFrames = ParseInt("BUFFER__MAXBUFFEREDFRAMES") ?? config.Buffer.MaxBufferedFrames;
         var dropOldestWhenFull = ParseBool("BUFFER__DROPOLDESTWHENFULL") ?? config.Buffer.DropOldestWhenFull;
+        var startupPrebufferFrames = ParseInt("ROBUSTNESS__STARTUPPREBUFFERFRAMES") ?? config.Robustness.StartupPrebufferFrames;
+        var targetBufferedFrames = ParseInt("ROBUSTNESS__TARGETBUFFEREDFRAMES") ?? config.Robustness.TargetBufferedFrames;
+        var maxLateFrameToleranceFrames = ParseInt("ROBUSTNESS__MAXLATEFRAMETOLERANCEFRAMES") ?? config.Robustness.MaxLateFrameToleranceFrames;
+        var concealMissingFramesWithSilence = ParseBool("ROBUSTNESS__CONCEALMISSINGFRAMESWITHSILENCE") ?? config.Robustness.ConcealMissingFramesWithSilence;
         var sampleRate = ParseInt("AUDIOFORMAT__SAMPLERATE") ?? config.AudioFormat.SampleRate;
         var channels = ParseInt("AUDIOFORMAT__CHANNELS") ?? config.AudioFormat.Channels;
         var bitsPerSample = ParseInt("AUDIOFORMAT__BITSPERSAMPLE") ?? config.AudioFormat.BitsPerSample;
@@ -67,6 +71,13 @@ internal sealed class HostConfigLoader
             {
                 MaxBufferedFrames = maxBufferedFrames,
                 DropOldestWhenFull = dropOldestWhenFull
+            },
+            Robustness = config.Robustness with
+            {
+                StartupPrebufferFrames = startupPrebufferFrames,
+                TargetBufferedFrames = targetBufferedFrames,
+                MaxLateFrameToleranceFrames = maxLateFrameToleranceFrames,
+                ConcealMissingFramesWithSilence = concealMissingFramesWithSilence
             },
             AudioFormat = config.AudioFormat with
             {

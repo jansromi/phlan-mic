@@ -14,7 +14,16 @@ public sealed class GeneratedSignalTestSourceTests
             BitsPerSample = 16,
             FrameDurationMs = 10
         };
-        var pipeline = new AudioStreamPipeline(format, new StreamBufferConfig { MaxBufferedFrames = 8 });
+        var pipeline = new AudioStreamPipeline(
+            format,
+            new StreamBufferConfig { MaxBufferedFrames = 8 },
+            new StreamRobustnessConfig
+            {
+                StartupPrebufferFrames = 2,
+                TargetBufferedFrames = 2,
+                MaxLateFrameToleranceFrames = 2,
+                ConcealMissingFramesWithSilence = true
+            });
         var source = new GeneratedSignalTestSource(
             format,
             new GeneratedSignalTestModeConfig

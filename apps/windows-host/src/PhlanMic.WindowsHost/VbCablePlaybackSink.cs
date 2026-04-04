@@ -381,7 +381,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
 
     private bool TryCreateOutputFrameLocked(bool allowSilence)
     {
-        if (pipeline.TryRead(out var frame))
+        if (pipeline.TryRead(out var frame, allowConcealment: true))
         {
             var outputFrame = formatConversionActive
                 ? Pcm16AudioFrameConverter.ConvertFrame(frame!, outputFormat)

@@ -10,6 +10,8 @@ public sealed record HostRuntimeConfig
 
     public StreamBufferConfig Buffer { get; init; } = new();
 
+    public StreamRobustnessConfig Robustness { get; init; } = new();
+
     public AudioFormat AudioFormat { get; init; } = AudioFormat.CreateMvpDefault();
 
     public GeneratedSignalTestModeConfig TestMode { get; init; } = new();
@@ -30,6 +32,7 @@ public sealed record HostRuntimeConfig
 
         Receiver.Validate();
         Buffer.Validate();
+        Robustness.Validate(Buffer);
         AudioFormat.Validate();
         TestMode.Validate();
         Output.Validate();

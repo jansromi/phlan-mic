@@ -57,7 +57,7 @@ internal sealed class DebugPipelineDrain
             {
                 var drainedAny = false;
 
-                while (pipeline.TryRead(out var frame))
+                while (pipeline.TryRead(out var frame, allowConcealment: false))
                 {
                     drainedAny = true;
                     RecordFrame(frame!);

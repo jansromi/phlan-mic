@@ -103,4 +103,42 @@ public sealed class HostRuntimeConfigTests
         var exception = Assert.Throws<InvalidOperationException>(config.Validate);
         Assert.Contains("endpoint id", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ValidateRejectsStartupPrebufferLargerThanBufferCapacity()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Buffer = new StreamBufferConfig
+            {
+                MaxBufferedFrames = 2
+            },
+            Robustness = new StreamRobustnessConfig
+            {
+                StartupPrebufferFrames = 3
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("prebuffer", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidateRejectsTargetBufferLargerThanBufferCapacity()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Buffer = new StreamBufferConfig
+            {
+                MaxBufferedFrames = 2
+            },
+            Robustness = new StreamRobustnessConfig
+            {
+                TargetBufferedFrames = 3
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("target buffered", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

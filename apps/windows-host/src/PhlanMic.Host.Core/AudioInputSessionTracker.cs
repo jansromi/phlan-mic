@@ -53,7 +53,8 @@ internal sealed class AudioInputSessionTracker
                 pipeline.RejectedFrames,
                 pipeline.DroppedFrames,
                 pipeline.BufferedFrameCount,
-                lastActivityUtc);
+                lastActivityUtc,
+                pipeline.GetRobustnessSnapshot());
         }
     }
 

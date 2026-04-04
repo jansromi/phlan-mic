@@ -8,4 +8,5 @@ public sealed record StreamStatisticsSnapshot(
     long RejectedFrames,
     long DroppedFrames,
     int BufferedFrameCount,
-    DateTimeOffset? LastActivityUtc);
+    DateTimeOffset? LastActivityUtc,
+    StreamRobustnessSnapshot Robustness);

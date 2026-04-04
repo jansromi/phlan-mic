@@ -329,7 +329,7 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
         out DateTimeOffset? capturedAtUtc,
         out bool isSilence)
     {
-        if (pipeline.TryRead(out var frame))
+        if (pipeline.TryRead(out var frame, allowConcealment: true))
         {
             var outputFrame = formatConversionActive
                 ? Pcm16AudioFrameConverter.ConvertFrame(frame!, outputFormat)
