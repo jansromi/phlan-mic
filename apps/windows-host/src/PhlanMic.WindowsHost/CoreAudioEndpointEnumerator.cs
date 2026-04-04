@@ -155,13 +155,13 @@ internal static class CoreAudioEndpointEnumerator
         defaultEndpoints.TryGetValue((flow, role), out var defaultEndpointId) &&
         string.Equals(defaultEndpointId, endpointId, StringComparison.Ordinal);
 
-    private static string ReadEndpointId(IMMDevice device)
+    private static unsafe string ReadEndpointId(IMMDevice device)
     {
         device.GetId(out var endpointId);
-        return endpointId ?? string.Empty;
+        return endpointId.Value is null ? string.Empty : endpointId.ToString();
     }
 
-    private static string? ReadFriendlyName(IMMDevice device)
+    private static unsafe string? ReadFriendlyName(IMMDevice device)
     {
         IPropertyStore? propertyStore = null;
         PROPVARIANT propertyValue = default;
@@ -170,11 +170,8 @@ internal static class CoreAudioEndpointEnumerator
         {
             device.OpenPropertyStore(STGM.STGM_READ, out propertyStore);
 
-            unsafe
-            {
-                var key = PInvoke.PKEY_Device_FriendlyName;
-                propertyStore.GetValue(&key, out propertyValue);
-            }
+            var key = PInvoke.PKEY_Device_FriendlyName;
+            propertyStore.GetValue(&key, out propertyValue);
 
             if (propertyValue.Anonymous.Anonymous.vt != VARENUM.VT_LPWSTR)
             {
