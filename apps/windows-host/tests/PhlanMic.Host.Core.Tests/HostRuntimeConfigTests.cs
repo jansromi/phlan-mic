@@ -134,6 +134,7 @@ public sealed class HostRuntimeConfigTests
             },
             Robustness = new StreamRobustnessConfig
             {
+                StartupPrebufferFrames = 2,
                 TargetBufferedFrames = 3
             }
         };

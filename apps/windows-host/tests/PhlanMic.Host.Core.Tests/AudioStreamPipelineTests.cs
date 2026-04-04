@@ -45,7 +45,7 @@ public sealed class AudioStreamPipelineTests
     public void WriteRejectsFrameWhenBufferIsFullAndDroppingIsDisabled()
     {
         var format = AudioFormat.CreateMvpDefault();
-        var pipeline = CreatePipeline(format, maxBufferedFrames: 1, dropOldestWhenFull: false);
+        var pipeline = CreatePipeline(format, maxBufferedFrames: 1, dropOldestWhenFull: false, startupPrebufferFrames: 1, targetBufferedFrames: 1);
 
         Assert.Equal(AudioEnqueueStatus.Accepted, pipeline.Write(CreateFrame(format, 1)).Status);
 
