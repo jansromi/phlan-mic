@@ -21,6 +21,12 @@ internal static class CoreAudioInterop
     public static PROPERTYKEY DeviceFriendlyNamePropertyKey { get; } =
         new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
 
+    public static PROPERTYKEY DeviceDescriptionPropertyKey { get; } =
+        new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 2);
+
+    public static PROPERTYKEY DeviceInterfaceFriendlyNamePropertyKey { get; } =
+        new(new Guid("026E516E-B814-414B-83CD-856D6FEF4822"), 2);
+
     public static IMMDeviceEnumerator CreateDeviceEnumerator()
     {
         var enumeratorType = Type.GetTypeFromCLSID(MmDeviceEnumeratorClsid, throwOnError: true);

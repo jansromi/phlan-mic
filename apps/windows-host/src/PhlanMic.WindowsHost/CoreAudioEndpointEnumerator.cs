@@ -141,23 +141,39 @@ internal static class CoreAudioEndpointEnumerator
     private static string? ReadFriendlyName(CoreAudioInterop.IMMDevice device)
     {
         CoreAudioInterop.IPropertyStore? propertyStore = null;
-        var propertyKey = CoreAudioInterop.DeviceFriendlyNamePropertyKey;
-        CoreAudioInterop.PROPVARIANT propertyValue = default;
 
         try
         {
             CoreAudioInterop.ThrowIfFailed(
                 device.OpenPropertyStore(CoreAudioInterop.StgmRead, out propertyStore),
                 "IMMDevice.OpenPropertyStore");
-            CoreAudioInterop.ThrowIfFailed(
-                propertyStore.GetValue(ref propertyKey, out propertyValue),
-                "IPropertyStore.GetValue");
-            return CoreAudioInterop.PropVariantToString(propertyValue);
+
+            return
+                TryReadPropertyString(propertyStore, CoreAudioInterop.DeviceFriendlyNamePropertyKey) ??
+                TryReadPropertyString(propertyStore, CoreAudioInterop.DeviceDescriptionPropertyKey) ??
+                TryReadPropertyString(propertyStore, CoreAudioInterop.DeviceInterfaceFriendlyNamePropertyKey);
+        }
+        finally
+        {
+            CoreAudioInterop.ReleaseComObject(propertyStore);
+        }
+    }
+
+    private static string? TryReadPropertyString(
+        CoreAudioInterop.IPropertyStore propertyStore,
+        CoreAudioInterop.PROPERTYKEY propertyKey)
+    {
+        CoreAudioInterop.PROPVARIANT propertyValue = default;
+
+        try
+        {
+            var lookupKey = propertyKey;
+            var hresult = propertyStore.GetValue(ref lookupKey, out propertyValue);
+            return hresult >= 0 ? CoreAudioInterop.PropVariantToString(propertyValue) : null;
         }
         finally
         {
             CoreAudioInterop.ClearPropVariant(ref propertyValue);
-            CoreAudioInterop.ReleaseComObject(propertyStore);
         }
     }
 }
