@@ -9,73 +9,57 @@ internal static class CoreAudioEndpointEnumerator
             return Array.Empty<AudioEndpointInfo>();
         }
 
-        CoreAudioInterop.IMMDeviceEnumerator? deviceEnumerator = null;
+        CoreAudioDiscoveryInterop.IMMDeviceEnumerator? deviceEnumerator = null;
 
-        try
-        {
-            deviceEnumerator = CoreAudioInterop.CreateDeviceEnumerator();
-            var endpoints = new List<AudioEndpointInfo>();
-            var defaultEndpoints = GetDefaultEndpointIds(deviceEnumerator);
+        deviceEnumerator = CoreAudioDiscoveryInterop.CreateDeviceEnumerator();
+        var endpoints = new List<AudioEndpointInfo>();
+        var defaultEndpoints = GetDefaultEndpointIds(deviceEnumerator);
 
-            EnumerateFlow(
-                deviceEnumerator,
-                CoreAudioInterop.EDataFlow.eRender,
-                AudioEndpointFlow.Render,
-                defaultEndpoints,
-                endpoints);
-            EnumerateFlow(
-                deviceEnumerator,
-                CoreAudioInterop.EDataFlow.eCapture,
-                AudioEndpointFlow.Capture,
-                defaultEndpoints,
-                endpoints);
+        EnumerateFlow(
+            deviceEnumerator,
+            CoreAudioDiscoveryInterop.EDataFlow.eRender,
+            AudioEndpointFlow.Render,
+            defaultEndpoints,
+            endpoints);
+        EnumerateFlow(
+            deviceEnumerator,
+            CoreAudioDiscoveryInterop.EDataFlow.eCapture,
+            AudioEndpointFlow.Capture,
+            defaultEndpoints,
+            endpoints);
 
-            return endpoints
-                .OrderBy(endpoint => endpoint.Flow)
-                .ThenBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
-                .ToArray();
-        }
-        finally
-        {
-            CoreAudioInterop.ReleaseComObject(deviceEnumerator);
-        }
+        return endpoints
+            .OrderBy(endpoint => endpoint.Flow)
+            .ThenBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
     }
 
-    private static Dictionary<(AudioEndpointFlow Flow, CoreAudioInterop.ERole Role), string> GetDefaultEndpointIds(
-        CoreAudioInterop.IMMDeviceEnumerator deviceEnumerator)
+    private static Dictionary<(AudioEndpointFlow Flow, CoreAudioDiscoveryInterop.ERole Role), string> GetDefaultEndpointIds(
+        CoreAudioDiscoveryInterop.IMMDeviceEnumerator deviceEnumerator)
     {
-        var defaults = new Dictionary<(AudioEndpointFlow, CoreAudioInterop.ERole), string>();
+        var defaults = new Dictionary<(AudioEndpointFlow, CoreAudioDiscoveryInterop.ERole), string>();
 
         foreach (var flow in new[]
                  {
-                     (CoreAudioInterop.EDataFlow.eRender, AudioEndpointFlow.Render),
-                     (CoreAudioInterop.EDataFlow.eCapture, AudioEndpointFlow.Capture)
+                     (CoreAudioDiscoveryInterop.EDataFlow.eRender, AudioEndpointFlow.Render),
+                     (CoreAudioDiscoveryInterop.EDataFlow.eCapture, AudioEndpointFlow.Capture)
                  })
         {
             foreach (var role in new[]
                      {
-                         CoreAudioInterop.ERole.eConsole,
-                         CoreAudioInterop.ERole.eMultimedia,
-                         CoreAudioInterop.ERole.eCommunications
+                         CoreAudioDiscoveryInterop.ERole.eConsole,
+                         CoreAudioDiscoveryInterop.ERole.eMultimedia,
+                         CoreAudioDiscoveryInterop.ERole.eCommunications
                      })
             {
-                CoreAudioInterop.IMMDevice? device = null;
-
-                try
+                var hresult = deviceEnumerator.GetDefaultAudioEndpoint(flow.Item1, role, out var device);
+                if (hresult < 0 || device is null)
                 {
-                    var hresult = deviceEnumerator.GetDefaultAudioEndpoint(flow.Item1, role, out device);
-                    if (hresult < 0 || device is null)
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    CoreAudioInterop.ThrowIfFailed(device.GetId(out var endpointId), "IMMDevice.GetId");
-                    defaults[(flow.Item2, role)] = endpointId;
-                }
-                finally
-                {
-                    CoreAudioInterop.ReleaseComObject(device);
-                }
+                CoreAudioDiscoveryInterop.ThrowIfFailed(device.GetId(out var endpointId), "IMMDevice.GetId");
+                defaults[(flow.Item2, role)] = endpointId;
             }
         }
 
@@ -83,60 +67,85 @@ internal static class CoreAudioEndpointEnumerator
     }
 
     private static void EnumerateFlow(
-        CoreAudioInterop.IMMDeviceEnumerator deviceEnumerator,
-        CoreAudioInterop.EDataFlow dataFlow,
+        CoreAudioDiscoveryInterop.IMMDeviceEnumerator deviceEnumerator,
+        CoreAudioDiscoveryInterop.EDataFlow dataFlow,
         AudioEndpointFlow flow,
-        IReadOnlyDictionary<(AudioEndpointFlow Flow, CoreAudioInterop.ERole Role), string> defaultEndpoints,
+        IReadOnlyDictionary<(AudioEndpointFlow Flow, CoreAudioDiscoveryInterop.ERole Role), string> defaultEndpoints,
         ICollection<AudioEndpointInfo> endpoints)
     {
-        CoreAudioInterop.IMMDeviceCollection? devices = null;
+        CoreAudioDiscoveryInterop.ThrowIfFailed(
+            deviceEnumerator.EnumAudioEndpoints(dataFlow, CoreAudioDiscoveryInterop.DeviceStateMaskAll, out var devices),
+            "IMMDeviceEnumerator.EnumAudioEndpoints");
+        CoreAudioDiscoveryInterop.ThrowIfFailed(devices.GetCount(out var deviceCount), "IMMDeviceCollection.GetCount");
 
-        try
+        for (uint index = 0; index < deviceCount; index++)
         {
-            CoreAudioInterop.ThrowIfFailed(
-                deviceEnumerator.EnumAudioEndpoints(dataFlow, CoreAudioInterop.DeviceStateMaskAll, out devices),
-                "IMMDeviceEnumerator.EnumAudioEndpoints");
-            CoreAudioInterop.ThrowIfFailed(devices.GetCount(out var deviceCount), "IMMDeviceCollection.GetCount");
+            CoreAudioDiscoveryInterop.ThrowIfFailed(devices.Item(index, out var device), "IMMDeviceCollection.Item");
+            CoreAudioDiscoveryInterop.ThrowIfFailed(device.GetId(out var endpointId), "IMMDevice.GetId");
+            CoreAudioDiscoveryInterop.ThrowIfFailed(device.GetState(out var endpointState), "IMMDevice.GetState");
 
-            for (uint index = 0; index < deviceCount; index++)
-            {
-                CoreAudioInterop.IMMDevice? device = null;
+            var friendlyName = ReadFriendlyName(device) ?? endpointId;
 
-                try
-                {
-                    CoreAudioInterop.ThrowIfFailed(devices.Item(index, out device), "IMMDeviceCollection.Item");
-                    CoreAudioInterop.ThrowIfFailed(device.GetId(out var endpointId), "IMMDevice.GetId");
-                    CoreAudioInterop.ThrowIfFailed(device.GetState(out var endpointState), "IMMDevice.GetState");
-
-                    endpoints.Add(
-                        new AudioEndpointInfo(
-                            endpointId,
-                            endpointId,
-                            endpointId,
-                            flow,
-                            (AudioEndpointState)endpointState,
-                            IsDefault(defaultEndpoints, flow, CoreAudioInterop.ERole.eConsole, endpointId),
-                            IsDefault(defaultEndpoints, flow, CoreAudioInterop.ERole.eMultimedia, endpointId),
-                            IsDefault(defaultEndpoints, flow, CoreAudioInterop.ERole.eCommunications, endpointId)));
-                }
-                finally
-                {
-                    CoreAudioInterop.ReleaseComObject(device);
-                }
-            }
-        }
-        finally
-        {
-            CoreAudioInterop.ReleaseComObject(devices);
+            endpoints.Add(
+                new AudioEndpointInfo(
+                    endpointId,
+                    friendlyName,
+                    friendlyName,
+                    flow,
+                    (AudioEndpointState)endpointState,
+                    IsDefault(defaultEndpoints, flow, CoreAudioDiscoveryInterop.ERole.eConsole, endpointId),
+                    IsDefault(defaultEndpoints, flow, CoreAudioDiscoveryInterop.ERole.eMultimedia, endpointId),
+                    IsDefault(defaultEndpoints, flow, CoreAudioDiscoveryInterop.ERole.eCommunications, endpointId)));
         }
     }
 
     private static bool IsDefault(
-        IReadOnlyDictionary<(AudioEndpointFlow Flow, CoreAudioInterop.ERole Role), string> defaultEndpoints,
+        IReadOnlyDictionary<(AudioEndpointFlow Flow, CoreAudioDiscoveryInterop.ERole Role), string> defaultEndpoints,
         AudioEndpointFlow flow,
-        CoreAudioInterop.ERole role,
+        CoreAudioDiscoveryInterop.ERole role,
         string endpointId) =>
         defaultEndpoints.TryGetValue((flow, role), out var defaultEndpointId) &&
         string.Equals(defaultEndpointId, endpointId, StringComparison.Ordinal);
 
+    private static string? ReadFriendlyName(CoreAudioDiscoveryInterop.IMMDevice device)
+    {
+        var hresult = device.OpenPropertyStore(CoreAudioDiscoveryInterop.StgmRead, out var propertyStore);
+        if (hresult < 0 || propertyStore is null)
+        {
+            return null;
+        }
+
+        return
+            TryReadPropertyString(propertyStore, CoreAudioDiscoveryInterop.DeviceFriendlyNamePropertyKey) ??
+            TryReadPropertyString(propertyStore, CoreAudioDiscoveryInterop.DeviceDescriptionPropertyKey) ??
+            TryReadPropertyString(propertyStore, CoreAudioDiscoveryInterop.DeviceInterfaceFriendlyNamePropertyKey);
+    }
+
+    private static string? TryReadPropertyString(
+        CoreAudioDiscoveryInterop.IPropertyStore propertyStore,
+        CoreAudioDiscoveryInterop.PROPERTYKEY propertyKey)
+    {
+        CoreAudioDiscoveryInterop.PROPVARIANT propertyValue = default;
+        var gotValue = false;
+
+        try
+        {
+            var lookupKey = propertyKey;
+            var hresult = propertyStore.GetValue(ref lookupKey, out propertyValue);
+            if (hresult < 0)
+            {
+                return null;
+            }
+
+            gotValue = true;
+            return CoreAudioDiscoveryInterop.TryConvertPropVariantToString(ref propertyValue);
+        }
+        finally
+        {
+            if (gotValue)
+            {
+                CoreAudioDiscoveryInterop.ClearPropVariant(ref propertyValue);
+            }
+        }
+    }
 }
