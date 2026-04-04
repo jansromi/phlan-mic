@@ -120,6 +120,33 @@ public sealed class AudioStreamPipelineTests
     }
 
     [Fact]
+    public void TryReadDoesNotAdvanceSequenceWhenBufferIsTemporarilyEmpty()
+    {
+        var format = AudioFormat.CreateMvpDefault();
+        var pipeline = CreatePipeline(format, maxBufferedFrames: 4, startupPrebufferFrames: 2, targetBufferedFrames: 2);
+
+        pipeline.Write(CreateFrame(format, 1));
+        pipeline.Write(CreateFrame(format, 2));
+
+        Assert.True(pipeline.TryRead(out var first, allowConcealment: true));
+        Assert.Equal(1, first!.SequenceNumber);
+        Assert.True(pipeline.TryRead(out var second, allowConcealment: true));
+        Assert.Equal(2, second!.SequenceNumber);
+        Assert.False(pipeline.TryRead(out _, allowConcealment: true));
+
+        var writeResult = pipeline.Write(CreateFrame(format, 3));
+
+        Assert.Equal(AudioEnqueueStatus.Accepted, writeResult.Status);
+        Assert.True(pipeline.TryRead(out var third, allowConcealment: true));
+        Assert.Equal(3, third!.SequenceNumber);
+
+        var snapshot = pipeline.GetRobustnessSnapshot();
+        Assert.Equal(0, snapshot.LateFramesArrived);
+        Assert.Equal(0, snapshot.LateFramesDropped);
+        Assert.Equal(0, snapshot.MissingFramesDetected);
+    }
+
+    [Fact]
     public void WriteDropsFramesThatArriveAfterPlaybackHasAlreadyMovedPastThem()
     {
         var format = AudioFormat.CreateMvpDefault();

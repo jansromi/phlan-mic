@@ -16,7 +16,6 @@ public sealed class AudioJitterBuffer
     private long missingFramesDetected;
     private long silenceFramesInserted;
     private int largestObservedGap;
-    private int consecutiveEmptyConcealments;
     private long? expectedNextSequence;
     private long? highestReceivedSequence;
     private long? activeGapEndSequenceExclusive;
@@ -172,7 +171,6 @@ public sealed class AudioJitterBuffer
             {
                 bufferedFrames.Remove(expectedNextSequence.Value);
                 expectedNextSequence++;
-                consecutiveEmptyConcealments = 0;
 
                 if (activeGapEndSequenceExclusive is not null &&
                     expectedNextSequence >= activeGapEndSequenceExclusive)
@@ -208,15 +206,8 @@ public sealed class AudioJitterBuffer
                 return true;
             }
 
-            if (consecutiveEmptyConcealments >= robustnessConfig.MaxLateFrameToleranceFrames)
-            {
-                state = StreamRobustnessState.Buffering;
-                return false;
-            }
-
-            consecutiveEmptyConcealments++;
-            frame = CreateConcealedFrameLocked();
-            return true;
+            state = StreamRobustnessState.Buffering;
+            return false;
         }
     }
 
@@ -250,7 +241,6 @@ public sealed class AudioJitterBuffer
             expectedNextSequence = null;
             highestReceivedSequence = null;
             activeGapEndSequenceExclusive = null;
-            consecutiveEmptyConcealments = 0;
             state = StreamRobustnessState.Buffering;
         }
     }

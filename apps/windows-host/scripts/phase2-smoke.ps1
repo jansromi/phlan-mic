@@ -411,10 +411,20 @@ try {
             "targetBufferedFrames"
         ) -Context "audio_output_started event"
 
-        $startedPrebufferDepth = [int](Get-PropertyValue -Event $firstOutputStarted -Name "currentPrebufferDepth")
         $startedPrebufferTarget = [int](Get-PropertyValue -Event $firstOutputStarted -Name "startupPrebufferFrames")
-        if ($startedPrebufferDepth -lt $startedPrebufferTarget) {
-            throw "Playback started with prebuffer depth $startedPrebufferDepth below startup target $startedPrebufferTarget. See $hostStdoutLog and $hostStderrLog"
+        $startedTargetBufferedFrames = [int](Get-PropertyValue -Event $firstOutputStarted -Name "targetBufferedFrames")
+        $startedRobustnessState = [string](Get-PropertyValue -Event $firstOutputStarted -Name "streamRobustnessState")
+
+        if ($startedPrebufferTarget -ne $StartupPrebufferFrames) {
+            throw "audio_output_started reported startup prebuffer $startedPrebufferTarget, expected $StartupPrebufferFrames. See $hostStdoutLog and $hostStderrLog"
+        }
+
+        if ($startedTargetBufferedFrames -ne $TargetBufferedFrames) {
+            throw "audio_output_started reported target buffered frames $startedTargetBufferedFrames, expected $TargetBufferedFrames. See $hostStdoutLog and $hostStderrLog"
+        }
+
+        if ($startedRobustnessState -ne "Streaming") {
+            throw "Playback started while streamRobustnessState was '$startedRobustnessState' instead of 'Streaming'. See $hostStdoutLog and $hostStderrLog"
         }
     }
 
@@ -464,8 +474,9 @@ try {
             }
         }
         "Pause" {
-            if ($summaryHostSilenceFramesInserted -le 0 -and $summaryMissingFramesDetected -le 0) {
-                throw "Pause scenario did not produce host-side concealment counters. See $hostStdoutLog and $hostStderrLog"
+            $summaryUnderrunCount = [int64](Get-PropertyValue -Event $summaryEvent -Name "underrunCount")
+            if ($summaryHostSilenceFramesInserted -le 0 -and $summaryMissingFramesDetected -le 0 -and $summaryUnderrunCount -le 0) {
+                throw "Pause scenario did not produce concealment or underrun evidence. See $hostStdoutLog and $hostStderrLog"
             }
         }
         "Burst" {
