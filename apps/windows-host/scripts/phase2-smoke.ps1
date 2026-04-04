@@ -3,6 +3,7 @@ param(
     [ValidateSet("WaveOut", "DebugDrain")]
     [string]$Mode = "WaveOut",
     [int]$DurationSeconds = 10,
+    [int]$DrainAfterSendMs = 250,
     [int]$Port = 42100,
     [int]$TargetLatencyMs = 80,
     [string]$SignalMode = "sine",
@@ -22,6 +23,10 @@ if ($Port -lt 1 -or $Port -gt 65535) {
 
 if ($TargetLatencyMs -le 0) {
     throw "TargetLatencyMs must be greater than zero."
+}
+
+if ($DrainAfterSendMs -lt 0) {
+    throw "DrainAfterSendMs must be zero or greater."
 }
 
 $root = Split-Path -Parent $PSScriptRoot
@@ -77,6 +82,67 @@ function Read-JsonLog {
     return $events
 }
 
+function Get-EventTimestampUtc {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object]$Event
+    )
+
+    if ($null -eq $Event.timestampUtc) {
+        return $null
+    }
+
+    return [DateTimeOffset]::Parse($Event.timestampUtc)
+}
+
+function Get-LatestStreamStatsAtOrBefore {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$Events,
+        [Parameter(Mandatory = $true)]
+        [DateTimeOffset]$TimestampUtc
+    )
+
+    return $Events |
+        Where-Object { $_.event -eq "stream_stats" } |
+        Where-Object { (Get-EventTimestampUtc -Event $_) -le $TimestampUtc } |
+        Select-Object -Last 1
+}
+
+function Get-FirstSessionEventByStateAfter {
+    param(
+        [Parameter(Mandatory = $true)]
+        [object[]]$Events,
+        [Parameter(Mandatory = $true)]
+        [string]$State,
+        [Parameter(Mandatory = $true)]
+        [DateTimeOffset]$TimestampUtc
+    )
+
+    return $Events |
+        Where-Object { $_.event -eq "stream_session_changed" -and $_.state -eq $State } |
+        Where-Object { (Get-EventTimestampUtc -Event $_) -ge $TimestampUtc } |
+        Select-Object -First 1
+}
+
+function Get-StatsCounterValue {
+    param(
+        [object]$StatsEvent,
+        [string]$PropertyName
+    )
+
+    if ($null -eq $StatsEvent) {
+        return [int64]0
+    }
+
+    $value = $StatsEvent.$PropertyName
+    if ($null -eq $value) {
+        return [int64]0
+    }
+
+    return [int64]$value
+}
+
 function Stop-HostProcess {
     if ($null -ne $hostProcess -and -not $hostProcess.HasExited) {
         Stop-Process -Id $hostProcess.Id -ErrorAction SilentlyContinue
@@ -98,7 +164,7 @@ try {
 
     while ((Get-Date) -lt $startupDeadline) {
         if ($hostProcess.HasExited) {
-            throw "Host exited before playback started. See $hostLog"
+            throw "Host exited before host_ready. See $hostStdoutLog and $hostStderrLog"
         }
 
         $events = Read-JsonLog -Path @($hostStdoutLog, $hostStderrLog)
@@ -119,6 +185,7 @@ try {
         throw "Timed out waiting for host_ready. See $hostStdoutLog and $hostStderrLog"
     }
 
+    $senderStartedAtUtc = [DateTimeOffset]::UtcNow
     $senderProcess = Start-Process `
         -FilePath "dotnet" `
         -ArgumentList @(
@@ -145,7 +212,12 @@ try {
         throw "Sender exited with code $($senderProcess.ExitCode). See $senderStdoutLog and $senderStderrLog"
     }
 
-    Start-Sleep -Seconds 2
+    $senderFinishedAtUtc = [DateTimeOffset]::UtcNow
+
+    if ($DrainAfterSendMs -gt 0) {
+        Start-Sleep -Milliseconds $DrainAfterSendMs
+    }
+
     Stop-HostProcess
 
     $events = Read-JsonLog -Path @($hostStdoutLog, $hostStderrLog)
@@ -178,6 +250,19 @@ try {
     $faultCount = @($events | Where-Object { $_.event -eq "stream_session_faulted" }).Count
     $hostStartFailures = @($events | Where-Object { $_.event -eq "host_start_failed" }).Count
     $completedThreshold = [int64][Math]::Floor($framesToSend * 0.8)
+    $baselineStats = Get-LatestStreamStatsAtOrBefore -Events $events -TimestampUtc $senderStartedAtUtc
+    $activeStats = Get-LatestStreamStatsAtOrBefore -Events $events -TimestampUtc $senderFinishedAtUtc
+    $disconnectEvent = Get-FirstSessionEventByStateAfter -Events $events -State "Disconnected" -TimestampUtc $senderStartedAtUtc
+    $disconnectObservedAtUtc = if ($null -ne $disconnectEvent) { Get-EventTimestampUtc -Event $disconnectEvent } else { $null }
+
+    $baselineAcceptedFrames = Get-StatsCounterValue -StatsEvent $baselineStats -PropertyName "acceptedFrames"
+    $baselineCompletedFrames = Get-StatsCounterValue -StatsEvent $baselineStats -PropertyName "outputCompletedFrames"
+    $baselineUnderrunCount = Get-StatsCounterValue -StatsEvent $baselineStats -PropertyName "underrunCount"
+    $activeWindowAcceptedFrames = [Math]::Max(0, $acceptedFrames - $baselineAcceptedFrames)
+    $activeWindowCompletedFrames = [Math]::Max(0, (Get-StatsCounterValue -StatsEvent $activeStats -PropertyName "outputCompletedFrames") - $baselineCompletedFrames)
+    $activeWindowUnderrunCount = [Math]::Max(0, (Get-StatsCounterValue -StatsEvent $activeStats -PropertyName "underrunCount") - $baselineUnderrunCount)
+    $postDisconnectUnderrunCount = [Math]::Max(0, $statsEvent.underrunCount - (Get-StatsCounterValue -StatsEvent $activeStats -PropertyName "underrunCount"))
+    $activeWindowCompletionRatio = if ($activeWindowAcceptedFrames -gt 0) { [double]$activeWindowCompletedFrames / [double]$activeWindowAcceptedFrames } else { 0.0 }
 
     if ($acceptedFrames -le 0) {
         throw "No accepted frames were observed. See $hostStdoutLog and $hostStderrLog"
@@ -196,15 +281,27 @@ try {
         deviceId = $DeviceId
         port = $Port
         durationSeconds = $DurationSeconds
+        drainAfterSendMs = $DrainAfterSendMs
+        senderStartedAtUtc = $senderStartedAtUtc
+        senderFinishedAtUtc = $senderFinishedAtUtc
+        disconnectObservedAtUtc = $disconnectObservedAtUtc
         framesSent = $framesToSend
         acceptedFrames = $acceptedFrames
         completedFrames = $completedFrames
+        activeWindowAcceptedFrames = $activeWindowAcceptedFrames
+        activeWindowCompletedFrames = $activeWindowCompletedFrames
+        activeWindowCompletionRatio = $activeWindowCompletionRatio
+        activeWindowUnderrunCount = $activeWindowUnderrunCount
+        postDisconnectUnderrunCount = $postDisconnectUnderrunCount
         underrunCount = [int64]$statsEvent.underrunCount
         silenceFramesInserted = [int64]$statsEvent.silenceFramesInserted
         estimatedLatencyMs = [double]$statsEvent.estimatedLatencyMs
         glitchRatePerMinute = [double]$statsEvent.glitchRatePerMinute
         outputDeviceName = $statsEvent.outputDeviceName
         outputFormat = $statsEvent.outputFormat
+        baselineStatsTimestampUtc = if ($null -ne $baselineStats) { Get-EventTimestampUtc -Event $baselineStats } else { $null }
+        activeStatsTimestampUtc = if ($null -ne $activeStats) { Get-EventTimestampUtc -Event $activeStats } else { $null }
+        finalStatsTimestampUtc = Get-EventTimestampUtc -Event $statsEvent
         faultCount = $faultCount
         hostStartFailures = $hostStartFailures
         hostStdoutLog = $hostStdoutLog
@@ -222,6 +319,9 @@ try {
     Write-Host "Sender stdout log: $senderStdoutLog"
     Write-Host "Sender stderr log: $senderStderrLog"
     Write-Host "Completed frames: $completedFrames"
+    Write-Host "Active window completed/accepted: $activeWindowCompletedFrames / $activeWindowAcceptedFrames"
+    Write-Host "Active window underruns: $activeWindowUnderrunCount"
+    Write-Host "Post-disconnect underruns: $postDisconnectUnderrunCount"
     Write-Host "Underruns: $($summary.underrunCount)"
     Write-Host "Estimated latency ms: $($summary.estimatedLatencyMs)"
 }

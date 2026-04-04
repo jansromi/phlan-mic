@@ -98,9 +98,10 @@ Useful smoke-script options:
 - `-Mode DebugDrain` runs the fallback sink and still validates host startup, sender completion, and stream stats.
 - `-Port 43000` uses a non-default port if you need to avoid a conflict.
 - `-TargetLatencyMs 60` lets you exercise a smaller playback target.
+- `-DrainAfterSendMs 250` controls how long the script waits after the sender exits before stopping the host.
 
 Artifacts are written under `artifacts\phase2-smoke\`:
 
 - `host-*.stdout.log` / `host-*.stderr.log`: host output captured during the run
 - `sender-*.stdout.log` / `sender-*.stderr.log`: debug sender output
-- `summary-*.json`: parsed acceptance summary with frame counts and playback stats
+- `summary-*.json`: parsed acceptance summary with frame counts, active-window completion, and separated underrun counts
