@@ -2,6 +2,8 @@ namespace PhlanMic.Host.Core;
 
 public sealed record ReceiverConfig
 {
+    public const string DebugTcpRawPcmTransportMode = "DebugTcpRawPcm";
+
     public string BindAddress { get; init; } = "0.0.0.0";
 
     public int Port { get; init; } = 42_100;
@@ -24,6 +26,11 @@ public sealed record ReceiverConfig
         {
             throw new InvalidOperationException("Receiver transport mode must be provided.");
         }
+
+        if (!string.Equals(TransportMode, DebugTcpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Receiver transport mode '{TransportMode}' is not supported in Phase 1.");
+        }
     }
 }
-

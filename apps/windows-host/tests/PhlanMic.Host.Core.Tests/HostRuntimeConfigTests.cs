@@ -26,4 +26,19 @@ public sealed class HostRuntimeConfigTests
         var exception = Assert.Throws<InvalidOperationException>(config.Validate);
         Assert.Contains("port", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void ValidateRejectsUnsupportedTransportMode()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Receiver = new ReceiverConfig
+            {
+                TransportMode = "Udp"
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("transport mode", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }

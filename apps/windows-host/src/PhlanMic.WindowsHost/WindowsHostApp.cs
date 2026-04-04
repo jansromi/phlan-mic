@@ -4,6 +4,7 @@ namespace PhlanMic.WindowsHost;
 
 internal sealed class WindowsHostApp
 {
+    private static readonly TimeSpan StatsLogInterval = TimeSpan.FromSeconds(5);
     private readonly StructuredConsoleLogger logger;
     private readonly HostRuntimeConfig config;
 
@@ -21,26 +22,85 @@ internal sealed class WindowsHostApp
         }
 
         var pipeline = new AudioStreamPipeline(config.AudioFormat, config.Buffer);
+        var inputSource = CreateInputSource(pipeline);
+        inputSource.SessionChanged += (_, snapshot) => LogSessionSnapshot(snapshot);
+
         logger.Info("host_ready", "Windows host foundation is ready.", new Dictionary<string, object?>
         {
             ["sessionName"] = config.SessionName,
             ["bindAddress"] = config.Receiver.BindAddress,
             ["port"] = config.Receiver.Port,
             ["transportMode"] = config.Receiver.TransportMode,
+            ["inputSource"] = inputSource.GetType().Name,
             ["audioFormat"] = $"{config.AudioFormat.SampleRate}Hz/{config.AudioFormat.Channels}ch/{config.AudioFormat.BitsPerSample}bit/{config.AudioFormat.FrameDurationMs}ms",
             ["bufferedFrames"] = pipeline.BufferedFrameCount,
             ["bufferCapacity"] = config.Buffer.MaxBufferedFrames,
             ["generatedSignalTestMode"] = config.TestMode.Enabled
         });
 
+        var inputTask = inputSource.RunAsync(cancellationToken);
+        var statsTask = LogStatsLoopAsync(inputSource, cancellationToken);
+
+        await Task.WhenAll(inputTask, statsTask);
+        logger.Info("host_shutdown", "Host shutdown requested.");
+    }
+
+    private IAudioInputSource CreateInputSource(AudioStreamPipeline pipeline) =>
+        config.TestMode.Enabled
+            ? new GeneratedSignalTestSource(config.AudioFormat, config.TestMode, pipeline)
+            : new DebugTcpRawPcmReceiver(config.Receiver, config.AudioFormat, pipeline);
+
+    private async Task LogStatsLoopAsync(IAudioInputSource inputSource, CancellationToken cancellationToken)
+    {
+        using var timer = new PeriodicTimer(StatsLogInterval);
+
         try
         {
-            await Task.Delay(Timeout.Infinite, cancellationToken);
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                var stats = inputSource.GetStatisticsSnapshot();
+                logger.Info("stream_stats", "Stream statistics updated.", new Dictionary<string, object?>
+                {
+                    ["bytesReceived"] = stats.BytesReceived,
+                    ["packetsReceived"] = stats.PacketsReceived,
+                    ["framesReceived"] = stats.FramesReceived,
+                    ["acceptedFrames"] = stats.AcceptedFrames,
+                    ["rejectedFrames"] = stats.RejectedFrames,
+                    ["droppedFrames"] = stats.DroppedFrames,
+                    ["bufferedFrames"] = stats.BufferedFrameCount,
+                    ["lastActivityUtc"] = stats.LastActivityUtc
+                });
+            }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            logger.Info("host_shutdown", "Host shutdown requested.");
         }
     }
-}
 
+    private void LogSessionSnapshot(StreamSessionSnapshot snapshot)
+    {
+        var properties = new Dictionary<string, object?>
+        {
+            ["state"] = snapshot.State.ToString(),
+            ["transportMode"] = snapshot.TransportMode,
+            ["localEndpoint"] = snapshot.LocalEndpoint,
+            ["remoteEndpoint"] = snapshot.RemoteEndpoint,
+            ["connectionId"] = snapshot.ConnectionId,
+            ["connectionCount"] = snapshot.ConnectionCount,
+            ["disconnectCount"] = snapshot.DisconnectCount,
+            ["startedAtUtc"] = snapshot.StartedAtUtc,
+            ["connectedAtUtc"] = snapshot.ConnectedAtUtc,
+            ["lastActivityUtc"] = snapshot.LastActivityUtc,
+            ["lastDisconnectedAtUtc"] = snapshot.LastDisconnectedAtUtc,
+            ["detail"] = snapshot.StatusDetail
+        };
+
+        if (snapshot.State is StreamSessionState.Faulted)
+        {
+            logger.Warning("stream_session_faulted", "Stream session faulted.", properties);
+            return;
+        }
+
+        logger.Info("stream_session_changed", "Stream session updated.", properties);
+    }
+}
