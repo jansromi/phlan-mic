@@ -35,6 +35,14 @@ internal static class VbCableEndpointMatcher
     {
         ArgumentNullException.ThrowIfNull(endpoints);
 
+        var allRenderEndpoints = endpoints
+            .Where(endpoint => endpoint.Flow is AudioEndpointFlow.Render)
+            .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        var allCaptureEndpoints = endpoints
+            .Where(endpoint => endpoint.Flow is AudioEndpointFlow.Capture)
+            .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
         var renderCandidates = endpoints
             .Where(IsVbCableRenderCandidate)
             .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
@@ -44,10 +52,35 @@ internal static class VbCableEndpointMatcher
             .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         var usablePairs = BuildUsablePairs(renderCandidates, captureCandidates);
+        var activeRenderEndpoints = allRenderEndpoints.Where(endpoint => endpoint.IsActive).ToArray();
+        var activeCaptureEndpoints = allCaptureEndpoints.Where(endpoint => endpoint.IsActive).ToArray();
+
+        if (renderCandidates.Length == 0 &&
+            captureCandidates.Length == 0 &&
+            activeRenderEndpoints.Length == 1 &&
+            activeCaptureEndpoints.Length == 1)
+        {
+            var fallbackPair = new VbCableEndpointPair(
+                activeRenderEndpoints[0],
+                activeCaptureEndpoints[0],
+                "single-active-render-capture-fallback");
+
+            if (string.IsNullOrWhiteSpace(preferredRenderEndpointId) ||
+                string.Equals(fallbackPair.RenderEndpoint.Id, preferredRenderEndpointId, StringComparison.Ordinal))
+            {
+                return new VbCableEndpointMatchResult(
+                    VbCableEndpointMatchStatus.Matched,
+                    fallbackPair,
+                    new[] { fallbackPair },
+                    renderCandidates,
+                    captureCandidates,
+                    preferredRenderEndpointId);
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(preferredRenderEndpointId))
         {
-            var preferredRenderEndpoint = renderCandidates.SingleOrDefault(
+            var preferredRenderEndpoint = allRenderEndpoints.SingleOrDefault(
                 endpoint => string.Equals(endpoint.Id, preferredRenderEndpointId, StringComparison.Ordinal));
 
             if (preferredRenderEndpoint is null)
@@ -67,6 +100,22 @@ internal static class VbCableEndpointMatcher
                     VbCableEndpointMatchStatus.PreferredRenderEndpointNotUsable,
                     null,
                     usablePairs,
+                    renderCandidates,
+                    captureCandidates,
+                    preferredRenderEndpointId);
+            }
+
+            if (preferredRenderEndpoint.IsActive && captureCandidates.Length == 0 && activeCaptureEndpoints.Length == 1)
+            {
+                var fallbackPair = new VbCableEndpointPair(
+                    preferredRenderEndpoint,
+                    activeCaptureEndpoints[0],
+                    "preferred-render-plus-single-active-capture-fallback");
+
+                return new VbCableEndpointMatchResult(
+                    VbCableEndpointMatchStatus.Matched,
+                    fallbackPair,
+                    usablePairs.Length == 0 ? new[] { fallbackPair } : usablePairs,
                     renderCandidates,
                     captureCandidates,
                     preferredRenderEndpointId);
