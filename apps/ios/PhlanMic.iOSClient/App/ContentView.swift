@@ -5,11 +5,10 @@ private enum SessionLayout {
 }
 
 private enum AppPalette {
-    static let backgroundStart = Color(.sRGB, red: 0.95, green: 0.97, blue: 0.99)
-    static let backgroundMid = Color(.sRGB, red: 0.90, green: 0.94, blue: 0.97)
-    static let backgroundEnd = Color(.sRGB, red: 0.98, green: 0.94, blue: 0.90)
-    static let backgroundCoolAccent = Color(.sRGB, red: 0.78, green: 0.87, blue: 0.94)
-    static let backgroundWarmAccent = Color(.sRGB, red: 0.93, green: 0.82, blue: 0.72)
+    static let appBackground = Color(uiColor: .systemGroupedBackground)
+    static let panelBackground = Color(uiColor: .secondarySystemBackground)
+    static let tileBackground = Color(uiColor: .tertiarySystemBackground)
+    static let panelBorder = Color(uiColor: .separator).opacity(0.18)
     static let meterLow = Color(.sRGB, red: 0.16, green: 0.55, blue: 0.76)
     static let meterMid = Color(.sRGB, red: 0.29, green: 0.70, blue: 0.40)
     static let statusOrange = Color(.sRGB, red: 0.96, green: 0.52, blue: 0.12)
@@ -147,36 +146,8 @@ struct ContentView: View {
 
 private struct SessionBackground: View {
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [
-                    AppPalette.backgroundStart,
-                    AppPalette.backgroundMid,
-                    AppPalette.backgroundEnd
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
+        AppPalette.appBackground
             .ignoresSafeArea()
-
-            Circle()
-                .fill(Color.white.opacity(0.55))
-                .frame(width: 260, height: 260)
-                .blur(radius: 6)
-                .offset(x: -110, y: -240)
-
-            Circle()
-                .fill(AppPalette.backgroundCoolAccent.opacity(0.55))
-                .frame(width: 220, height: 220)
-                .blur(radius: 18)
-                .offset(x: 120, y: -120)
-
-            Circle()
-                .fill(AppPalette.backgroundWarmAccent.opacity(0.35))
-                .frame(width: 260, height: 260)
-                .blur(radius: 24)
-                .offset(x: 120, y: 280)
-        }
     }
 }
 
@@ -190,15 +161,8 @@ private struct PrimaryMicButton: View {
                 .frame(width: 220, height: 220)
 
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [baseColor.opacity(0.82), baseColor],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(baseColor)
                 .frame(width: 164, height: 164)
-                .shadow(color: baseColor.opacity(0.32), radius: 28, x: 0, y: 18)
 
             Circle()
                 .strokeBorder(Color.white.opacity(0.65), lineWidth: 3)
@@ -241,10 +205,10 @@ private struct MeterPanel: View {
         }
         .padding(20)
         .frame(maxWidth: SessionLayout.panelWidth)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(AppPalette.panelBackground, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                .stroke(AppPalette.panelBorder, lineWidth: 1)
         )
     }
 }
@@ -274,13 +238,7 @@ private struct LevelMeterRow: View {
                         .fill(Color.primary.opacity(0.09))
 
                     Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: meterColors,
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
+                        .fill(meterColors.first ?? AppPalette.meterLow)
                         .frame(width: geometry.size.width * CGFloat(max(0, min(value, 1))))
                 }
             }
@@ -343,10 +301,10 @@ private struct ConnectionStatusCard: View {
                     .foregroundStyle(.secondary)
             }
             .padding(18)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+            .background(AppPalette.panelBackground, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                    .stroke(AppPalette.panelBorder, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -408,10 +366,10 @@ private struct SessionHealthPanel: View {
         }
         .padding(20)
         .frame(maxWidth: SessionLayout.panelWidth)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .background(AppPalette.panelBackground, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                .stroke(AppPalette.panelBorder, lineWidth: 1)
         )
         .sheet(item: selectedHealthItemBinding) { item in
             SessionHealthDetailSheet(item: item)
@@ -459,7 +417,7 @@ private struct SessionHealthTile: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Color.white.opacity(0.35), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .background(AppPalette.tileBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 
