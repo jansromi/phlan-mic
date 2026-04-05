@@ -533,7 +533,7 @@ final class AppModel: ObservableObject {
             return "Live microphone capture still requires a physical iPhone."
         case .granted:
             if setupStatus == .ready {
-                return "Ready to stream to \(hostConfiguration.displayEndpoint)."
+                return ""
             }
 
             return hostSetupHint
@@ -593,7 +593,7 @@ final class AppModel: ObservableObject {
         }
 
         return setupStatus == .ready
-            ? "Ready to stream. Tap to edit the host or port."
+            ? "Tap to edit the host or port."
             : hostSetupHint
     }
 
@@ -675,20 +675,12 @@ final class AppModel: ObservableObject {
             return lastTransportError
         }
 
-        if transportStatus == .streaming {
-            return "Streaming to \(hostConfiguration.displayEndpoint)."
-        }
-
         if transportStatus.isActive && transportStatus != .streaming {
             return transportDetail
         }
 
         if shouldSurfaceLifecycleStop {
             return lastSystemStopDetail
-        }
-
-        if setupStatus == .ready {
-            return "Ready to stream when you tap the microphone."
         }
 
         return nil

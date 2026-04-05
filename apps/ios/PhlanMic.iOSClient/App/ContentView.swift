@@ -20,12 +20,7 @@ private enum AppPalette {
 }
 
 private enum StatusLabelAnimation {
-    static let connectingFrames = [
-        "Connecting .",
-        "Connecting ..",
-        "Connecting ...",
-        "Connecting"
-    ]
+    static let maxDotCount = 3
 }
 
 struct ContentView: View {
@@ -51,15 +46,13 @@ struct ContentView: View {
                         .buttonStyle(.plain)
 
                         VStack(spacing: 8) {
-                            Text(animatedConnectingText(for: model.primaryStatusTitle))
+                            AnimatedConnectingLabel(
+                                text: model.primaryStatusTitle,
+                                isConnecting: shouldAnimateConnectingLabel(for: model.primaryStatusTitle),
+                                step: connectingTextStep
+                            )
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
                                 .multilineTextAlignment(.center)
-
-                            Text(model.primaryStatusDetail)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .multilineTextAlignment(.center)
-                                .frame(maxWidth: 320)
                         }
                     }
 
@@ -89,7 +82,8 @@ struct ContentView: View {
             .safeAreaInset(edge: .bottom) {
                 ConnectionStatusCard(
                     model: model,
-                    statusLabel: animatedConnectingText(for: model.connectionCardStatusLabel)
+                    isConnecting: shouldAnimateConnectingLabel(for: model.connectionCardStatusLabel),
+                    connectingStep: connectingTextStep
                 )
                     .frame(maxWidth: SessionLayout.panelWidth)
                     .padding(.horizontal, 20)
@@ -130,17 +124,36 @@ struct ContentView: View {
                     return
                 }
 
-                connectingTextStep = (connectingTextStep + 1) % StatusLabelAnimation.connectingFrames.count
+                connectingTextStep = (connectingTextStep + 1) % (StatusLabelAnimation.maxDotCount + 1)
             }
         }
     }
 
-    private func animatedConnectingText(for text: String) -> String {
-        guard model.transportStatus == .connecting, text == AppModel.TransportStatus.connecting.rawValue else {
-            return text
-        }
+    private func shouldAnimateConnectingLabel(for text: String) -> Bool {
+        model.transportStatus == .connecting && text == AppModel.TransportStatus.connecting.rawValue
+    }
+}
 
-        return StatusLabelAnimation.connectingFrames[connectingTextStep]
+private struct AnimatedConnectingLabel: View {
+    let text: String
+    let isConnecting: Bool
+    let step: Int
+
+    var body: some View {
+        if isConnecting {
+            HStack(spacing: 0) {
+                Text(AppModel.TransportStatus.connecting.rawValue)
+
+                ZStack(alignment: .leading) {
+                    Text(String(repeating: ".", count: StatusLabelAnimation.maxDotCount))
+                        .hidden()
+
+                    Text(String(repeating: ".", count: step))
+                }
+            }
+        } else {
+            Text(text)
+        }
     }
 }
 
@@ -261,44 +274,58 @@ private struct LevelMeterRow: View {
 
 private struct ConnectionStatusCard: View {
     @ObservedObject var model: AppModel
-    let statusLabel: String
+    let isConnecting: Bool
+    let connectingStep: Int
 
     var body: some View {
         Button {
             model.presentHostSettings()
         } label: {
-            HStack(spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
                 VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(StatusTint.color(named: model.connectionCardTintName))
-                            .frame(width: 10, height: 10)
+                    HStack(alignment: .top, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Circle()
+                                .fill(StatusTint.color(named: model.connectionCardTintName))
+                                .frame(width: 10, height: 10)
 
-                        Text(statusLabel)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(StatusTint.color(named: model.connectionCardTintName))
+                            AnimatedConnectingLabel(
+                                text: model.connectionCardStatusLabel,
+                                isConnecting: isConnecting,
+                                step: connectingStep
+                            )
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(StatusTint.color(named: model.connectionCardTintName))
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Text(model.hostConfiguration.transportMode.label)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(AppPalette.tileBackground, in: Capsule())
                     }
 
                     Text(model.connectionCardTitle)
                         .font(.headline)
                         .foregroundStyle(.primary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
 
                     Text(model.connectionCardDetail)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.leading)
-
-                    Text("Transport: \(model.hostConfiguration.transportMode.label)")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
-
-                Image(systemName: "chevron.up")
+                Image(systemName: "slider.horizontal.3")
                     .font(.headline.weight(.bold))
                     .foregroundStyle(.secondary)
+                    .padding(.top, 2)
             }
             .padding(18)
             .background(AppPalette.panelBackground, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
@@ -486,16 +513,12 @@ private struct DebugView: View {
 
     var body: some View {
         Form {
-            Section("Setup Options") {
+            Section("Connection") {
                 LabeledStatusRow(
                     title: "Setup",
                     value: model.setupStatus.rawValue,
                     tintName: model.setupStatus.tintName
                 )
-
-                Text(model.setupDetail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
 
                 HostConfigurationFields(model: model, showsCheckpointButton: true)
 
@@ -513,16 +536,13 @@ private struct DebugView: View {
                     tintName: model.microphonePermission.tintName
                 )
 
-                Text(model.microphonePermission.detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Button("Request Permission") {
-                    Task {
-                        await model.requestMicrophonePermission()
+                if model.canRequestMicrophonePermission {
+                    Button("Request Permission") {
+                        Task {
+                            await model.requestMicrophonePermission()
+                        }
                     }
                 }
-                .disabled(!model.canRequestMicrophonePermission)
             }
 
             Section("Capture") {
@@ -532,25 +552,26 @@ private struct DebugView: View {
                     tintName: model.captureStatus.tintName
                 )
 
-                Text(model.captureDetail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Button("Start Capture") {
-                    Task {
-                        await model.startCapture()
+                if model.canStartCapture {
+                    Button("Start Capture") {
+                        Task {
+                            await model.startCapture()
+                        }
                     }
                 }
-                .disabled(!model.canStartCapture)
 
-                Button("Stop Capture") {
-                    model.stopCapture()
+                if model.canStopCapture {
+                    Button("Stop Capture") {
+                        model.stopCapture()
+                    }
                 }
-                .disabled(!model.canStopCapture)
 
                 KeyValueRow(label: "Session", value: model.captureSessionSummary)
-                KeyValueRow(label: "Framed Packets", value: "\(model.capturedFrameCount)")
-                KeyValueRow(label: "Latest Frame", value: model.latestFrameSummary)
+
+                if model.capturedFrameCount > 0 {
+                    KeyValueRow(label: "Framed Packets", value: "\(model.capturedFrameCount)")
+                    KeyValueRow(label: "Latest Frame", value: model.latestFrameSummary)
+                }
             }
 
             Section("Transport") {
@@ -560,31 +581,44 @@ private struct DebugView: View {
                     tintName: model.transportStatus.tintName
                 )
 
-                Text(model.transportDetail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Button("Connect and Stream") {
-                    Task {
-                        await model.connectAndStream()
+                if model.canConnectAndStream {
+                    Button("Connect and Stream") {
+                        Task {
+                            await model.connectAndStream()
+                        }
                     }
                 }
-                .disabled(!model.canConnectAndStream)
 
-                Button("Disconnect") {
-                    model.disconnectTransport()
+                if model.canDisconnectTransport {
+                    Button("Disconnect") {
+                        model.disconnectTransport()
+                    }
                 }
-                .disabled(!model.canDisconnectTransport)
 
                 KeyValueRow(label: "Endpoint", value: model.hostConfiguration.displayEndpoint)
-                KeyValueRow(label: "Frames Sent", value: "\(model.transportFramesSent)")
-                KeyValueRow(label: "Bytes Sent", value: "\(model.transportBytesSent)")
-                KeyValueRow(label: "Control Sent", value: "\(model.transportControlMessagesSent)")
-                KeyValueRow(label: "Control Received", value: "\(model.transportControlMessagesReceived)")
-                KeyValueRow(label: "Reconnects", value: "\(model.transportReconnectCount)")
-                KeyValueRow(label: "Last Send", value: model.lastSuccessfulSendSummary)
-                KeyValueRow(label: "Last Keepalive", value: model.lastKeepAliveSummary)
-                KeyValueRow(label: "Last Error", value: model.lastTransportError)
+
+                if model.transportFramesSent > 0 || model.transportBytesSent > 0 {
+                    KeyValueRow(label: "Frames Sent", value: "\(model.transportFramesSent)")
+                    KeyValueRow(label: "Bytes Sent", value: "\(model.transportBytesSent)")
+                    KeyValueRow(label: "Last Send", value: model.lastSuccessfulSendSummary)
+                }
+
+                if model.transportControlMessagesSent > 0 || model.transportControlMessagesReceived > 0 {
+                    KeyValueRow(label: "Control Sent", value: "\(model.transportControlMessagesSent)")
+                    KeyValueRow(label: "Control Received", value: "\(model.transportControlMessagesReceived)")
+                }
+
+                if model.transportReconnectCount > 0 {
+                    KeyValueRow(label: "Reconnects", value: "\(model.transportReconnectCount)")
+                }
+
+                if model.lastKeepAliveTime != nil {
+                    KeyValueRow(label: "Last Keepalive", value: model.lastKeepAliveSummary)
+                }
+
+                if model.lastTransportError != "No transport errors." {
+                    KeyValueRow(label: "Last Error", value: model.lastTransportError)
+                }
             }
 
             Section("Lifecycle") {
@@ -593,12 +627,14 @@ private struct DebugView: View {
                 KeyValueRow(label: "Route Change", value: model.lastRouteChange?.debugLabel ?? "None")
                 KeyValueRow(label: "System Stop", value: model.lastSystemStopReason?.debugLabel ?? "None")
 
-                Text(model.lastSystemStopDetail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if model.lastSystemStopReason != nil {
+                    Text(model.lastSystemStopDetail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
 
-            Section("Input Meter") {
+            Section("Audio") {
                 MeterRow(
                     label: "Average",
                     value: model.latestInputLevel.averageLevel,
@@ -611,14 +647,9 @@ private struct DebugView: View {
                 )
             }
 
-            Section("Audio MVP") {
-                KeyValueRow(label: "Format", value: MVPAudioFormat.defaultVoice.debugSummary)
-                KeyValueRow(label: "Packet Model", value: MVPAudioPacket.prototype.debugSummary)
-            }
-
             Section("Diagnostics") {
                 if model.diagnostics.isEmpty {
-                    Text("No diagnostics yet.")
+                    Text("No diagnostics.")
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(model.diagnostics) { entry in

@@ -88,6 +88,26 @@ enum MicrophoneCaptureError: LocalizedError {
 }
 
 final class MicrophoneCaptureClient {
+    private final class SessionNotificationRelay: @unchecked Sendable {
+        weak var client: MicrophoneCaptureClient?
+
+        init(client: MicrophoneCaptureClient) {
+            self.client = client
+        }
+
+        func handleInterruption(_ notification: Notification) {
+            client?.handleInterruptionNotification(notification)
+        }
+
+        func handleRouteChange(_ notification: Notification) {
+            client?.handleRouteChangeNotification(notification)
+        }
+
+        func handleMediaServicesReset() {
+            client?.emitSessionEventIfCapturing(.mediaServicesWereReset)
+        }
+    }
+
     private let session = AVAudioSession.sharedInstance()
     private let lock = NSLock()
 
@@ -100,6 +120,7 @@ final class MicrophoneCaptureClient {
     private var onFailure: (@Sendable (Error) -> Void)?
     private var onSessionEvent: (@Sendable (CaptureSessionEvent) -> Void)?
     private var notificationObservers: [NSObjectProtocol] = []
+    private var sessionNotificationRelay: SessionNotificationRelay?
 
     func startCapture(
         format: MVPAudioFormat = .defaultVoice,
@@ -340,27 +361,29 @@ final class MicrophoneCaptureClient {
         removeSessionObservers()
 
         let center = NotificationCenter.default
+        let relay = SessionNotificationRelay(client: self)
+        sessionNotificationRelay = relay
         notificationObservers = [
             center.addObserver(
                 forName: AVAudioSession.interruptionNotification,
                 object: session,
                 queue: nil
-            ) { [weak self] notification in
-                self?.handleInterruptionNotification(notification)
+            ) { notification in
+                relay.handleInterruption(notification)
             },
             center.addObserver(
                 forName: AVAudioSession.routeChangeNotification,
                 object: session,
                 queue: nil
-            ) { [weak self] notification in
-                self?.handleRouteChangeNotification(notification)
+            ) { notification in
+                relay.handleRouteChange(notification)
             },
             center.addObserver(
                 forName: AVAudioSession.mediaServicesWereResetNotification,
                 object: nil,
                 queue: nil
-            ) { [weak self] _ in
-                self?.emitSessionEventIfCapturing(.mediaServicesWereReset)
+            ) { _ in
+                relay.handleMediaServicesReset()
             }
         ]
     }
@@ -371,6 +394,7 @@ final class MicrophoneCaptureClient {
             center.removeObserver(observer)
         }
         notificationObservers.removeAll(keepingCapacity: false)
+        sessionNotificationRelay = nil
     }
 
     private func handleInterruptionNotification(_ notification: Notification) {
