@@ -178,7 +178,9 @@ final class AppModel: ObservableObject {
     struct SessionHealthItem: Equatable, Identifiable {
         let id: String
         let title: String
+        let detailTitle: String
         let value: String
+        let detail: String
         let tintName: String
     }
 
@@ -382,23 +384,33 @@ final class AppModel: ObservableObject {
         [
             SessionHealthItem(
                 id: "connection",
-                title: "Connection",
+                title: "Status",
+                detailTitle: "Connection Status",
                 value: sessionHealthConnectionValue,
+                detail: sessionHealthConnectionDetail,
                 tintName: sessionHealthConnectionTintName
             ),
             SessionHealthItem(
                 id: "sent",
                 title: "Sent",
+                detailTitle: "Outgoing Frames",
                 value: sessionHealthSentValue,
+                detail: sessionHealthSentDetail,
                 tintName: sessionHealthSentTintName
             ),
             SessionHealthItem(
                 id: "last-send",
-                title: "Last Send",
+                title: "Last",
+                detailTitle: "Last Successful Send",
                 value: sessionHealthLastSendValue,
+                detail: sessionHealthLastSendDetail,
                 tintName: sessionHealthLastSendTintName
             )
         ]
+    }
+
+    var sessionHealthSummary: String {
+        sessionHealthItems.map(\.value).joined(separator: " • ")
     }
 
     var sessionHealthFootnote: String? {
@@ -419,6 +431,10 @@ final class AppModel: ObservableObject {
         }
 
         return nil
+    }
+
+    func sessionHealthDetail(for itemID: String) -> SessionHealthItem? {
+        sessionHealthItems.first { $0.id == itemID }
     }
 
     func loadStartupState() async {
@@ -654,6 +670,25 @@ final class AppModel: ObservableObject {
         return setupStatus.tintName
     }
 
+    private var sessionHealthConnectionDetail: String {
+        switch transportStatus {
+        case .streaming:
+            return "The session is live and microphone audio is reaching \(hostConfiguration.displayEndpoint)."
+        case .connecting:
+            return "The app is opening a connection to \(hostConfiguration.displayEndpoint)."
+        case .connected:
+            return "The host connection is open and the audio pipeline is starting."
+        case .stopping:
+            return "The current session is shutting down cleanly."
+        case .error:
+            return lastTransportError
+        case .disconnected:
+            return setupStatus == .ready
+                ? "The host configuration is ready and the session is idle."
+                : hostSetupHint
+        }
+    }
+
     private var sessionHealthSentValue: String {
         switch transportStatus {
         case .connecting, .connected:
@@ -680,6 +715,16 @@ final class AppModel: ObservableObject {
         case .disconnected:
             return transportFramesSent > 0 ? "blue" : "slate"
         }
+    }
+
+    private var sessionHealthSentDetail: String {
+        if transportFramesSent == 0 && transportBytesSent == 0 {
+            return transportStatus.isActive
+                ? "The connection is active, but no audio frames have been confirmed yet."
+                : "No audio frames have been sent in this session."
+        }
+
+        return "\(transportFramesSent) frames and \(transportBytesSent) bytes have been sent in this session."
     }
 
     private var sessionHealthLastSendValue: String {
@@ -709,6 +754,16 @@ final class AppModel: ObservableObject {
         }
 
         return transportStatus.isActive ? "yellow" : "slate"
+    }
+
+    private var sessionHealthLastSendDetail: String {
+        guard let lastSuccessfulSendTime else {
+            return transportStatus == .error
+                ? "No successful send was recorded before the last transport failure."
+                : "No successful send has been recorded yet."
+        }
+
+        return "The latest confirmed send completed at \(lastSuccessfulSendTime.formatted(date: .omitted, time: .standard))."
     }
 
     private var hostSetupHint: String {

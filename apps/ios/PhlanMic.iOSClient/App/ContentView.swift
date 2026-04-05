@@ -300,22 +300,53 @@ private struct ConnectionStatusCard: View {
 
 private struct SessionHealthPanel: View {
     @ObservedObject var model: AppModel
+    @State private var isExpanded = true
+    @State private var selectedItemID: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Session Health")
-                .font(.headline)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Session Health")
+                            .font(.headline)
 
-            HStack(spacing: 12) {
-                ForEach(model.sessionHealthItems) { item in
-                    SessionHealthTile(item: item)
+                        Text(model.sessionHealthSummary)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.secondary)
                 }
             }
+            .buttonStyle(.plain)
 
-            if let footnote = model.sessionHealthFootnote {
-                Text(footnote)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+            if isExpanded {
+                HStack(spacing: 12) {
+                    ForEach(model.sessionHealthItems) { item in
+                        Button {
+                            selectedItemID = item.id
+                        } label: {
+                            SessionHealthTile(item: item)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                if let footnote = model.sessionHealthFootnote {
+                    Text(footnote)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(20)
@@ -324,6 +355,26 @@ private struct SessionHealthPanel: View {
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+        .sheet(item: selectedHealthItemBinding) { item in
+            SessionHealthDetailSheet(item: item)
+                .presentationDetents([.height(220), .medium])
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    private var selectedHealthItemBinding: Binding<AppModel.SessionHealthItem?> {
+        Binding(
+            get: {
+                guard let selectedItemID else {
+                    return nil
+                }
+
+                return model.sessionHealthDetail(for: selectedItemID)
+            },
+            set: { newValue in
+                selectedItemID = newValue?.id
+            }
         )
     }
 }
@@ -352,6 +403,36 @@ private struct SessionHealthTile: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.white.opacity(0.35), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+    }
+}
+
+private struct SessionHealthDetailSheet: View {
+    let item: AppModel.SessionHealthItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 10) {
+                Circle()
+                    .fill(StatusTint.color(named: item.tintName))
+                    .frame(width: 10, height: 10)
+
+                Text(item.detailTitle)
+                    .font(.headline)
+            }
+
+            Text(item.value)
+                .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                .foregroundStyle(StatusTint.color(named: item.tintName))
+
+            Text(item.detail)
+                .font(.body)
+                .foregroundStyle(.secondary)
+
+            Spacer(minLength: 0)
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(uiColor: .systemBackground))
     }
 }
 

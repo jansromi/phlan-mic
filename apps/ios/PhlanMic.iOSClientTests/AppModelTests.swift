@@ -76,7 +76,9 @@ final class AppModelTests: XCTestCase {
 
         let model = makeModel(harness: harness, host: "10.0.0.42")
 
+        XCTAssertEqual(model.sessionHealthItems.map(\.title), ["Status", "Sent", "Last"])
         XCTAssertEqual(model.sessionHealthItems.map(\.value), ["Ready", "Idle", "None"])
+        XCTAssertEqual(model.sessionHealthSummary, "Ready • Idle • None")
         XCTAssertEqual(model.sessionHealthFootnote, "Ready to stream when you tap the microphone.")
     }
 
@@ -95,6 +97,10 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(
             model.sessionHealthItems[2].value,
             lastSendTime.formatted(date: .omitted, time: .shortened)
+        )
+        XCTAssertEqual(
+            model.sessionHealthItems[0].detail,
+            "The session is live and microphone audio is reaching 10.0.0.42:42100."
         )
         XCTAssertEqual(model.sessionHealthFootnote, "Streaming to 10.0.0.42:42100.")
     }
