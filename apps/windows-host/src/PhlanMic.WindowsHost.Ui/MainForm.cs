@@ -113,9 +113,9 @@ internal sealed class MainForm : Form
             RowCount = 4
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 37.5f));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 37.5f));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
 
         root.Controls.Add(BuildHeaderPanel(), 0, 0);
         root.Controls.Add(BuildTopSections(), 0, 1);
@@ -130,8 +130,7 @@ internal sealed class MainForm : Form
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            AutoSize = true
+            ColumnCount = 2
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
@@ -206,8 +205,7 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
-            AutoSize = true
+            RowCount = 2
         };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
