@@ -39,6 +39,7 @@ struct ContentView: View {
                     }
 
                     MeterPanel(inputLevel: model.latestInputLevel)
+                    SessionHealthPanel(model: model)
 
                     Spacer()
                 }
@@ -294,6 +295,63 @@ private struct ConnectionStatusCard: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SessionHealthPanel: View {
+    @ObservedObject var model: AppModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Session Health")
+                .font(.headline)
+
+            HStack(spacing: 12) {
+                ForEach(model.sessionHealthItems) { item in
+                    SessionHealthTile(item: item)
+                }
+            }
+
+            if let footnote = model.sessionHealthFootnote {
+                Text(footnote)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: SessionLayout.panelWidth)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(Color.white.opacity(0.55), lineWidth: 1)
+        )
+    }
+}
+
+private struct SessionHealthTile: View {
+    let item: AppModel.SessionHealthItem
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(StatusTint.color(named: item.tintName))
+                    .frame(width: 8, height: 8)
+
+                Text(item.title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(item.value)
+                .font(.headline.monospacedDigit())
+                .foregroundStyle(StatusTint.color(named: item.tintName))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color.white.opacity(0.35), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
 }
 

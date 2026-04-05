@@ -175,6 +175,13 @@ final class AppModel: ObservableObject {
         let message: String
     }
 
+    struct SessionHealthItem: Equatable, Identifiable {
+        let id: String
+        let title: String
+        let value: String
+        let tintName: String
+    }
+
     @Published var hostConfiguration = HostConfiguration()
     @Published var microphonePermission = MicrophonePermissionState.unknown
     @Published var setupStatus = SetupStatus.setupRequired
@@ -339,7 +346,7 @@ final class AppModel: ObservableObject {
         }
 
         return setupStatus == .ready
-            ? "TCP Debug is ready. Tap to edit the host or port."
+            ? "Ready to stream. Tap to edit the host or port."
             : hostSetupHint
     }
 
@@ -369,6 +376,49 @@ final class AppModel: ObservableObject {
         }
 
         return lastSuccessfulSendTime.formatted(date: .omitted, time: .standard)
+    }
+
+    var sessionHealthItems: [SessionHealthItem] {
+        [
+            SessionHealthItem(
+                id: "connection",
+                title: "Connection",
+                value: sessionHealthConnectionValue,
+                tintName: sessionHealthConnectionTintName
+            ),
+            SessionHealthItem(
+                id: "sent",
+                title: "Sent",
+                value: sessionHealthSentValue,
+                tintName: sessionHealthSentTintName
+            ),
+            SessionHealthItem(
+                id: "last-send",
+                title: "Last Send",
+                value: sessionHealthLastSendValue,
+                tintName: sessionHealthLastSendTintName
+            )
+        ]
+    }
+
+    var sessionHealthFootnote: String? {
+        if transportStatus == .error {
+            return lastTransportError
+        }
+
+        if transportStatus == .streaming {
+            return "Streaming to \(hostConfiguration.displayEndpoint)."
+        }
+
+        if transportStatus == .connecting || transportStatus == .connected || transportStatus == .stopping {
+            return transportDetail
+        }
+
+        if setupStatus == .ready {
+            return "Ready to stream when you tap the microphone."
+        }
+
+        return nil
     }
 
     func loadStartupState() async {
@@ -577,6 +627,88 @@ final class AppModel: ObservableObject {
 
     var canDisconnectTransport: Bool {
         transportStatus.isActive
+    }
+
+    private var sessionHealthConnectionValue: String {
+        switch transportStatus {
+        case .streaming:
+            return "Live"
+        case .connecting:
+            return "Joining"
+        case .connected:
+            return "Linked"
+        case .stopping:
+            return "Stopping"
+        case .error:
+            return "Error"
+        case .disconnected:
+            return setupStatus == .ready ? "Ready" : "Setup"
+        }
+    }
+
+    private var sessionHealthConnectionTintName: String {
+        if transportStatus != .disconnected {
+            return transportStatus.tintName
+        }
+
+        return setupStatus.tintName
+    }
+
+    private var sessionHealthSentValue: String {
+        switch transportStatus {
+        case .connecting, .connected:
+            return "Waiting"
+        case .streaming:
+            return transportFramesSent == 0 ? "Starting" : "\(transportFramesSent)"
+        case .stopping:
+            return "\(transportFramesSent)"
+        case .error:
+            return transportFramesSent == 0 ? "Failed" : "\(transportFramesSent)"
+        case .disconnected:
+            return transportFramesSent == 0 ? "Idle" : "\(transportFramesSent)"
+        }
+    }
+
+    private var sessionHealthSentTintName: String {
+        switch transportStatus {
+        case .error:
+            return "red"
+        case .streaming:
+            return "green"
+        case .connecting, .connected, .stopping:
+            return "yellow"
+        case .disconnected:
+            return transportFramesSent > 0 ? "blue" : "slate"
+        }
+    }
+
+    private var sessionHealthLastSendValue: String {
+        guard let lastSuccessfulSendTime else {
+            switch transportStatus {
+            case .error:
+                return "Failed"
+            case .connecting, .connected:
+                return "Pending"
+            case .streaming:
+                return "Pending"
+            case .stopping, .disconnected:
+                return "None"
+            }
+        }
+
+        return lastSuccessfulSendTime.formatted(date: .omitted, time: .shortened)
+    }
+
+    private var sessionHealthLastSendTintName: String {
+        if transportStatus == .error {
+            return "red"
+        }
+
+        if lastSuccessfulSendTime != nil {
+            return transportStatus == .streaming ? "green" : "blue"
+        }
+
+        return transportStatus.isActive ? "yellow" : "slate"
     }
 
     private var hostSetupHint: String {

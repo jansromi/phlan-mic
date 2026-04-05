@@ -70,6 +70,35 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.connectionCardDetail, "TCP connection failed: timed out")
     }
 
+    func testSessionHealthShowsReadyStateBeforeStreaming() {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(harness: harness, host: "10.0.0.42")
+
+        XCTAssertEqual(model.sessionHealthItems.map(\.value), ["Ready", "Idle", "None"])
+        XCTAssertEqual(model.sessionHealthFootnote, "Ready to stream when you tap the microphone.")
+    }
+
+    func testSessionHealthShowsStreamingStateAfterSuccessfulSend() {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(harness: harness, host: "10.0.0.42")
+        let lastSendTime = Date(timeIntervalSince1970: 1_700_000_000)
+        model.transportStatus = .streaming
+        model.transportFramesSent = 128
+        model.lastSuccessfulSendTime = lastSendTime
+
+        XCTAssertEqual(model.sessionHealthItems[0].value, "Live")
+        XCTAssertEqual(model.sessionHealthItems[1].value, "128")
+        XCTAssertEqual(
+            model.sessionHealthItems[2].value,
+            lastSendTime.formatted(date: .omitted, time: .shortened)
+        )
+        XCTAssertEqual(model.sessionHealthFootnote, "Streaming to 10.0.0.42:42100.")
+    }
+
     private func makeModel(
         harness: Harness,
         host: String = "",
