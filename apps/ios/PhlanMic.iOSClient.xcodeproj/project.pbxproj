@@ -15,6 +15,7 @@
 		A00000010000000000000006 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000006 /* AppLogger.swift */; };
 		A00000010000000000000007 /* HostConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000007 /* HostConfiguration.swift */; };
 		A00000010000000000000008 /* MicrophonePermissionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000008 /* MicrophonePermissionClient.swift */; };
+		A00000010000000000000009 /* MicrophoneCaptureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000010 /* MicrophoneCaptureClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +28,7 @@
 		A00000110000000000000007 /* HostConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostConfiguration.swift; sourceTree = "<group>"; };
 		A00000110000000000000008 /* MicrophonePermissionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionClient.swift; sourceTree = "<group>"; };
 		A00000110000000000000009 /* PhlanMic.iOSClient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = PhlanMic.iOSClient.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000110000000000000010 /* MicrophoneCaptureClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneCaptureClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -83,6 +85,7 @@
 			children = (
 				A00000110000000000000004 /* AudioFormat.swift */,
 				A00000110000000000000005 /* AudioPacket.swift */,
+				A00000110000000000000010 /* MicrophoneCaptureClient.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -185,6 +188,7 @@
 				A00000010000000000000006 /* AppLogger.swift in Sources */,
 				A00000010000000000000004 /* AudioFormat.swift in Sources */,
 				A00000010000000000000007 /* HostConfiguration.swift in Sources */,
+				A00000010000000000000009 /* MicrophoneCaptureClient.swift in Sources */,
 				A00000010000000000000008 /* MicrophonePermissionClient.swift in Sources */,
 				A00000010000000000000001 /* PhlanMicIOSClientApp.swift in Sources */,
 			);

@@ -39,7 +39,48 @@ struct ContentView: View {
                             await model.requestMicrophonePermission()
                         }
                     }
-                    .disabled(model.microphonePermission == .simulatorUnavailable)
+                    .disabled(!model.canRequestMicrophonePermission)
+                }
+
+                Section("Capture") {
+                    LabeledStatusRow(
+                        title: "Status",
+                        value: model.captureStatus.rawValue,
+                        tintName: model.captureStatus.tintName
+                    )
+
+                    Text(model.captureDetail)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+
+                    Button("Start Capture") {
+                        Task {
+                            await model.startCapture()
+                        }
+                    }
+                    .disabled(!model.canStartCapture)
+
+                    Button("Stop Capture") {
+                        model.stopCapture()
+                    }
+                    .disabled(!model.canStopCapture)
+
+                    KeyValueRow(label: "Session", value: model.captureSessionSummary)
+                    KeyValueRow(label: "Framed Packets", value: "\(model.capturedFrameCount)")
+                    KeyValueRow(label: "Latest Frame", value: model.latestFrameSummary)
+                }
+
+                Section("Input Meter") {
+                    MeterRow(
+                        label: "Average",
+                        value: model.latestInputLevel.averageLevel,
+                        detail: "\(model.latestInputLevel.averagePercentage)% (\(model.latestInputLevel.averageDecibels) dBFS)"
+                    )
+                    MeterRow(
+                        label: "Peak",
+                        value: model.latestInputLevel.peakLevel,
+                        detail: "\(model.latestInputLevel.peakPercentage)% (\(model.latestInputLevel.peakDecibels) dBFS)"
+                    )
                 }
 
                 Section("Host") {
@@ -124,7 +165,7 @@ private struct LabeledStatusRow: View {
             Spacer()
             Text(value)
                 .fontWeight(.semibold)
-                .foregroundStyle(Color(tintName))
+                .foregroundStyle(StatusTint.color(named: tintName))
         }
     }
 }
@@ -142,5 +183,47 @@ private struct KeyValueRow: View {
                 .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+private struct MeterRow: View {
+    let label: String
+    let value: Float
+    let detail: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(label)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: Double(max(0, min(value, 1))), total: 1)
+                .tint(value > 0.8 ? .red : (value > 0.4 ? .orange : .green))
+        }
+        .padding(.vertical, 2)
+    }
+}
+
+private enum StatusTint {
+    static func color(named tintName: String) -> Color {
+        switch tintName {
+        case "orange":
+            .orange
+        case "blue":
+            .blue
+        case "yellow":
+            .yellow
+        case "green":
+            .green
+        case "red":
+            .red
+        default:
+            .primary
+        }
     }
 }
