@@ -203,7 +203,7 @@ public sealed class AudioJitterBuffer
                     !HasMissedFrameDeadlineLocked(now))
                 {
                     state = StreamRobustnessState.Buffering;
-                    return false;
+                    return new AudioReadResult(AudioReadStatus.WaitingForFrame, null, bufferedFrames.Count);
                 }
 
                 RegisterGap(nextAvailableSequence, gapSize);
