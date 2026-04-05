@@ -18,7 +18,9 @@ public sealed class TransportControlMessageProtocolTests
 
         Assert.Equal(TransportControlMessageType.Hello, decoded.GetMessageType());
         Assert.Equal("test-session", decoded.SessionName);
-        Assert.Equal(["RawPcm16"], decoded.SupportedCodecs);
+        Assert.NotNull(decoded.SupportedCodecs);
+        Assert.Single(decoded.SupportedCodecs!);
+        Assert.Equal("RawPcm16", decoded.SupportedCodecs[0]);
         Assert.Equal(1000, decoded.KeepAliveIntervalMs);
         Assert.Equal(5000, decoded.SessionTimeoutMs);
     }

@@ -25,7 +25,7 @@ public sealed class RawPcmAudioPayloadDecoderTests
         var decoder = new RawPcmAudioPayloadDecoder(AudioFormat.CreateMvpDefault());
 
         var exception = Assert.Throws<TransportProtocolException>(() =>
-            decoder.Decode(1, DateTimeOffset.UtcNow, AudioPayloadCodec.RawPcm16, [1, 2, 3]));
+            decoder.Decode(1, DateTimeOffset.UtcNow, AudioPayloadCodec.RawPcm16, new byte[] { 1, 2, 3 }));
 
         Assert.Contains("frame size", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
