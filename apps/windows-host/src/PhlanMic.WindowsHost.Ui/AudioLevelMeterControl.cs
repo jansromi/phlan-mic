@@ -8,6 +8,7 @@ internal sealed class AudioLevelMeterControl : Control
     private double rmsLevel;
     private bool signalDetected;
     private bool clippingDetected;
+    private string idleText = "NO AUDIO";
 
     public AudioLevelMeterControl()
     {
@@ -61,6 +62,11 @@ internal sealed class AudioLevelMeterControl : Control
             e.Graphics.DrawLine(peakPen, peakX, bounds.Top, peakX, bounds.Bottom);
         }
 
+        if (!signalDetected)
+        {
+            DrawIdleText(e.Graphics, bounds);
+        }
+
         e.Graphics.DrawRectangle(borderPen, bounds);
     }
 
@@ -87,6 +93,17 @@ internal sealed class AudioLevelMeterControl : Control
                 ? Color.FromArgb(111, 207, 151)
                 : Color.FromArgb(206, 212, 218);
         return new LinearGradientBrush(bounds, startColor, endColor, LinearGradientMode.Horizontal);
+    }
+
+    private void DrawIdleText(Graphics graphics, Rectangle bounds)
+    {
+        using var textBrush = new SolidBrush(Color.FromArgb(108, 117, 125));
+        using var textFormat = new StringFormat
+        {
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center
+        };
+        graphics.DrawString(idleText, Font, textBrush, bounds, textFormat);
     }
 
     private static double Clamp01(double value) => Math.Max(0, Math.Min(1, value));
