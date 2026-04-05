@@ -6,6 +6,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PhlanMic.Host.Core", "src\P
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PhlanMic.WindowsHost", "src\PhlanMic.WindowsHost\PhlanMic.WindowsHost.csproj", "{0DD67FB0-E328-4309-97C0-357F651B20E5}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PhlanMic.WindowsHost.Ui", "src\PhlanMic.WindowsHost.Ui\PhlanMic.WindowsHost.Ui.csproj", "{BB6ADF02-B53C-4172-A510-BA88EC7DBA3E}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PhlanMic.Host.Core.Tests", "tests\PhlanMic.Host.Core.Tests\PhlanMic.Host.Core.Tests.csproj", "{42D68537-7053-4B10-973E-CEB7AF5AAFE3}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "PhlanMic.DebugTcpSender", "src\PhlanMic.DebugTcpSender\PhlanMic.DebugTcpSender.csproj", "{C1B993AF-7558-47E2-95BB-F15A3D540165}"
@@ -24,6 +26,10 @@ Global
 		{0DD67FB0-E328-4309-97C0-357F651B20E5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0DD67FB0-E328-4309-97C0-357F651B20E5}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0DD67FB0-E328-4309-97C0-357F651B20E5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BB6ADF02-B53C-4172-A510-BA88EC7DBA3E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BB6ADF02-B53C-4172-A510-BA88EC7DBA3E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BB6ADF02-B53C-4172-A510-BA88EC7DBA3E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BB6ADF02-B53C-4172-A510-BA88EC7DBA3E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{42D68537-7053-4B10-973E-CEB7AF5AAFE3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{42D68537-7053-4B10-973E-CEB7AF5AAFE3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{42D68537-7053-4B10-973E-CEB7AF5AAFE3}.Release|Any CPU.ActiveCfg = Release|Any CPU

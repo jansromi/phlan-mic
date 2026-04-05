@@ -6,7 +6,7 @@ using System.Text.Json;
 
 namespace PhlanMic.WindowsHost;
 
-internal enum StructuredLogLevel
+public enum StructuredLogLevel
 {
     Trace,
     Debug,
@@ -15,13 +15,13 @@ internal enum StructuredLogLevel
     Error
 }
 
-internal enum StructuredConsoleLogFormat
+public enum StructuredConsoleLogFormat
 {
     Text,
     Json
 }
 
-internal static class StructuredLogLevelParser
+public static class StructuredLogLevelParser
 {
     public static StructuredLogLevel Parse(string value) =>
         Enum.TryParse<StructuredLogLevel>(value, ignoreCase: true, out var parsed)
@@ -29,7 +29,7 @@ internal static class StructuredLogLevelParser
             : throw new InvalidOperationException($"Unsupported log level '{value}'.");
 }
 
-internal static class StructuredConsoleLogFormatParser
+public static class StructuredConsoleLogFormatParser
 {
     public static StructuredConsoleLogFormat Parse(string value) =>
         Enum.TryParse<StructuredConsoleLogFormat>(value, ignoreCase: true, out var parsed)
@@ -37,7 +37,7 @@ internal static class StructuredConsoleLogFormatParser
             : throw new InvalidOperationException($"Unsupported log format '{value}'.");
 }
 
-internal sealed class StructuredConsoleLogger
+public sealed class StructuredConsoleLogger
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

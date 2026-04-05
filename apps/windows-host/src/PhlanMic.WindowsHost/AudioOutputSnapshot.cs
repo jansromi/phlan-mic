@@ -1,6 +1,6 @@
 namespace PhlanMic.WindowsHost;
 
-internal sealed record AudioOutputSnapshot(
+public sealed record AudioOutputSnapshot(
     string SinkKind,
     int? DeviceId,
     string? DeviceName,
@@ -22,4 +22,29 @@ internal sealed record AudioOutputSnapshot(
     DateTimeOffset? StartedAtUtc,
     DateTimeOffset? LastFrameCapturedAtUtc,
     DateTimeOffset? LastSubmittedAtUtc,
-    DateTimeOffset? LastCompletedAtUtc);
+    DateTimeOffset? LastCompletedAtUtc)
+{
+    public static AudioOutputSnapshot Empty(string sinkKind) => new(
+        sinkKind,
+        null,
+        null,
+        null,
+        null,
+        null,
+        "n/a",
+        false,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        null,
+        null,
+        null,
+        null,
+        null);
+}

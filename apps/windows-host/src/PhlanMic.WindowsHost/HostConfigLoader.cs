@@ -4,7 +4,7 @@ using PhlanMic.Host.Core;
 
 namespace PhlanMic.WindowsHost;
 
-internal sealed class HostConfigLoader
+public sealed class HostConfigLoader
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {

@@ -4,6 +4,7 @@ Projects:
 
 - `src/PhlanMic.Host.Core`: transport-agnostic audio format, buffering, and stream pipeline primitives.
 - `src/PhlanMic.WindowsHost`: Windows-only startup, config loading, and readable console logging with optional JSON mode.
+- `src/PhlanMic.WindowsHost.Ui`: Phase 6 desktop shell for host readiness, manual connect details, output readiness, and troubleshooting.
 - `src/PhlanMic.DebugTcpSender`: sender/test tool for exercising both the raw PCM TCP receiver and the Phase 5 UDP transport.
 - `tests/PhlanMic.Host.Core.Tests`: core tests with no Windows-only dependencies.
 
@@ -21,7 +22,16 @@ cd apps/windows-host
 dotnet build PhlanMic.WindowsHost.sln
 dotnet test PhlanMic.WindowsHost.sln
 dotnet run --project src/PhlanMic.WindowsHost
+dotnet run --project src/PhlanMic.WindowsHost.Ui
 ```
+
+The console host and desktop host now share the same runtime layer. The console app remains the best path for SSH/smoke-test flows, while the UI shows:
+
+- host readiness and fault state
+- local IP / manual connect details
+- selected output target and VB-CABLE pairing state
+- live session / stream counters
+- troubleshooting diagnostics without parsing structured logs
 
 Environment overrides use the `PHLANMIC__` prefix. Example:
 
