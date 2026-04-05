@@ -12,9 +12,9 @@ final class AppModelTests: XCTestCase {
         await model.handlePrimaryMicTap()
 
         XCTAssertEqual(harness.requestPermissionCallCount, 1)
-        XCTAssertEqual(harness.connectCalls.count, 1)
-        XCTAssertEqual(harness.connectCalls.first?.host, "192.168.1.15")
-        XCTAssertEqual(harness.connectCalls.first?.port, HostConfiguration.defaultDebugTcpPort)
+        XCTAssertEqual(harness.transport.connectCalls.count, 1)
+        XCTAssertEqual(harness.transport.connectCalls.first?.host, "192.168.1.15")
+        XCTAssertEqual(harness.transport.connectCalls.first?.port, HostConfiguration.defaultDebugTcpPort)
         XCTAssertEqual(model.transportStatus, .connecting)
     }
 
@@ -26,20 +26,41 @@ final class AppModelTests: XCTestCase {
         await model.handlePrimaryMicTap()
 
         XCTAssertEqual(model.presentedSheet, .hostSettings)
-        XCTAssertTrue(harness.connectCalls.isEmpty)
+        XCTAssertTrue(harness.transport.connectCalls.isEmpty)
     }
 
-    func testPrimaryTapStartsConnectAndStreamWhenConfigurationIsValid() async {
+    func testPrimaryTapStartsConnectAndStreamWhenTcpConfigurationIsValid() async {
         let harness = Harness()
         harness.currentPermissionStatus = .granted
 
         let model = makeModel(harness: harness, host: "10.0.0.42", port: "43000")
         await model.handlePrimaryMicTap()
 
-        XCTAssertEqual(harness.connectCalls.count, 1)
-        XCTAssertEqual(harness.connectCalls.first?.host, "10.0.0.42")
-        XCTAssertEqual(harness.connectCalls.first?.port, 43_000)
+        XCTAssertEqual(harness.createdTransportModes, [.tcpDebug])
+        XCTAssertEqual(harness.transport.connectCalls.count, 1)
+        XCTAssertEqual(harness.transport.connectCalls.first?.host, "10.0.0.42")
+        XCTAssertEqual(harness.transport.connectCalls.first?.port, 43_000)
         XCTAssertNil(model.presentedSheet)
+        XCTAssertEqual(model.transportStatus, .connecting)
+    }
+
+    func testUdpRealtimeConfigurationIsReadyAndConnects() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+
+        XCTAssertEqual(model.setupStatus, .ready)
+
+        await model.handlePrimaryMicTap()
+
+        XCTAssertEqual(harness.createdTransportModes, [.udpRealtime])
+        XCTAssertEqual(harness.transport.connectCalls.count, 1)
         XCTAssertEqual(model.transportStatus, .connecting)
     }
 
@@ -52,22 +73,52 @@ final class AppModelTests: XCTestCase {
 
         await model.handlePrimaryMicTap()
 
-        XCTAssertEqual(harness.disconnectCallCount, 1)
+        XCTAssertEqual(harness.transport.disconnectCallCount, 1)
         XCTAssertEqual(model.transportStatus, .stopping)
     }
 
-    func testErrorStateUpdatesPrimaryControlAndConnectionCard() {
+    func testRealtimeTransportEventsAdvanceStateAndCounters() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+
+        await model.connectAndStream()
+        harness.transport.emit(.stateChanged(.controlConnected, detail: "TCP control channel connected."))
+        XCTAssertEqual(model.transportStatus, .controlConnected)
+
+        harness.transport.emit(.controlMessageSent(.hello))
+        harness.transport.emit(.controlMessageReceived(.helloAccepted))
+        harness.transport.emit(.stateChanged(.handshakeAccepted, detail: "Handshake accepted."))
+        XCTAssertEqual(model.transportStatus, .handshakeAccepted)
+        XCTAssertEqual(model.transportControlMessagesSent, 1)
+        XCTAssertEqual(model.transportControlMessagesReceived, 1)
+
+        harness.transport.emit(.stateChanged(.readyForAudio, detail: "UDP audio stream accepted."))
+        XCTAssertEqual(model.transportStatus, .connected)
+
+        let keepAliveTime = Date(timeIntervalSince1970: 1_700_000_000)
+        harness.transport.emit(.keepAliveSent(keepAliveTime))
+        XCTAssertEqual(model.lastKeepAliveTime, keepAliveTime)
+    }
+
+    func testTransportFailureUpdatesPrimaryControlAndConnectionCard() {
         let harness = Harness()
         harness.currentPermissionStatus = .granted
 
         let model = makeModel(harness: harness, host: "10.0.0.42")
         model.transportStatus = .error
-        model.transportDetail = "TCP connection failed: timed out"
-        model.lastTransportError = "TCP connection failed: timed out"
+        model.transportDetail = "Control channel failed: timed out"
+        model.lastTransportError = "Control channel failed: timed out"
 
         XCTAssertEqual(model.primaryMicVisualState, .error)
         XCTAssertEqual(model.connectionCardStatusLabel, "Error")
-        XCTAssertEqual(model.connectionCardDetail, "TCP connection failed: timed out")
+        XCTAssertEqual(model.connectionCardDetail, "Control channel failed: timed out")
     }
 
     func testSessionHealthShowsReadyStateBeforeStreaming() {
@@ -108,11 +159,13 @@ final class AppModelTests: XCTestCase {
     private func makeModel(
         harness: Harness,
         host: String = "",
-        port: String = String(HostConfiguration.defaultDebugTcpPort)
+        port: String = String(HostConfiguration.defaultDebugTcpPort),
+        transportMode: HostConfiguration.TransportMode = .tcpDebug
     ) -> AppModel {
         let model = AppModel(dependencies: harness.dependencies)
         model.updateHostAddress(host)
         model.updatePortText(port)
+        model.updateTransportMode(transportMode)
         return model
     }
 }
@@ -121,9 +174,8 @@ private final class Harness {
     var currentPermissionStatus: MicrophonePermissionState = .unknown
     var requestPermissionStatus: MicrophonePermissionState = .granted
     var requestPermissionCallCount = 0
-    var connectCalls: [(host: String, port: UInt16)] = []
-    var disconnectCallCount = 0
-    var transportEventHandler: (@Sendable (DebugTcpPcmClientEvent) -> Void)?
+    var createdTransportModes: [HostConfiguration.TransportMode] = []
+    let transport = MockTransportClient()
 
     var dependencies: AppModel.Dependencies {
         AppModel.Dependencies(
@@ -145,19 +197,38 @@ private final class Harness {
                 )
             },
             stopCapture: {},
-            connectTransport: { [unowned self] host, port in
-                connectCalls.append((host, port))
-            },
-            disconnectTransport: { [unowned self] in
-                disconnectCallCount += 1
-            },
-            sendTransportPayload: { _, completion in
-                completion(.success(0))
-            },
-            setTransportEventHandler: { [unowned self] handler in
-                transportEventHandler = handler
+            makeTransportClient: { [unowned self] transportMode, handler in
+                createdTransportModes.append(transportMode)
+                transport.eventHandler = handler
+                return transport.client
             },
             log: { _ in }
         )
+    }
+}
+
+private final class MockTransportClient: @unchecked Sendable {
+    var connectCalls: [(host: String, port: UInt16, format: MVPAudioFormat)] = []
+    var disconnectCallCount = 0
+    var sentFrames: [CapturedAudioFrame] = []
+    var eventHandler: (@Sendable (AudioTransportEvent) -> Void)?
+
+    var client: AudioTransportClient {
+        AudioTransportClient(
+            connect: { [unowned self] host, port, format in
+                connectCalls.append((host, port, format))
+            },
+            disconnect: { [unowned self] in
+                disconnectCallCount += 1
+            },
+            sendFrame: { [unowned self] frame, completion in
+                sentFrames.append(frame)
+                completion(.success(frame.payload.count))
+            }
+        )
+    }
+
+    func emit(_ event: AudioTransportEvent) {
+        eventHandler?(event)
     }
 }

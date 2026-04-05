@@ -1,174 +1,237 @@
 # iOS Client Tasks
 
-This document breaks the iPhone iOS client into implementation tasks for the MVP.
+This document tracks the iPhone client work needed to catch up with the current Windows host implementation.
 
-Current MVP assumptions:
+The Windows side now supports two input paths:
 
-- iOS client will target Swift and SwiftUI
-- Microphone capture will use AVFoundation
-- Network transport will start with a debug-friendly manual connection flow
-- Initial streaming can assume foreground-only operation
-- Windows host will be the receiving endpoint for the MVP
+- `DebugTcpRawPcm`
+- `UdpRawPcm` with a TCP control channel and UDP audio packets
+
+The iOS client already has a usable foundation for manual host entry, microphone capture, status UI, and debug TCP streaming. The main gap is that the app still treats `udpRealtime` as a placeholder instead of implementing the same Phase 5 transport contract that now exists on Windows.
 
 ## Goal
 
-Build an iPhone app that captures microphone audio and streams it to the Windows host with low enough latency for voice use.
+Build an iPhone app that:
 
-## Toolchain
+- captures microphone audio in the MVP format
+- streams it to the Windows host over the real Phase 5 transport path
+- surfaces enough state to debug capture, network, and host-side failures
 
-Recommended:
+## Current Status
 
-- Xcode
-- Swift
-- SwiftUI for basic app shell and status UI
-- AVFoundation for microphone capture and audio session management
-- Network.framework for LAN transport
-- Bonjour/mDNS if automatic discovery is added during MVP
+What already exists in the iOS client:
 
-Build and testing targets:
+- SwiftUI app shell with connection and session state
+- microphone permission flow
+- live microphone capture on device
+- framed mono PCM output aligned with the MVP host format
+- manual host address and port entry
+- debug TCP transport client
+- basic transport/capture diagnostics
 
-- iPhone device first
-- iOS simulator only for non-audio UI and session-flow checks
-- Physical device testing for capture, networking, and latency validation
+What is still missing for parity with the Windows host:
 
-## Task Breakdown
+- a transport-agnostic networking layer
+- Phase 5 control protocol support on iOS
+- `UdpRawPcm` transport implementation
+- keepalive / timeout / reconnect handling for the real transport
+- protocol-level diagnostics and tests
 
-### Phase 0: Client Foundation
+## MVP Alignment
 
-1. Create the iOS app project structure.
-2. Add a minimal app shell with connection status and microphone permission state.
-3. Define the client-side audio format and packet model for MVP.
-4. Add basic logging and diagnostics for capture and transport startup.
-5. Establish a simple local configuration model for host address, port, and transport mode.
+Current shared MVP audio assumptions:
 
-Definition of done:
+- `48 kHz`
+- `mono`
+- `16-bit signed PCM`
+- `20 ms` packet cadence
 
-- The app launches on an iPhone.
-- The app can show basic status without streaming.
-- The app builds a stable foundation for capture and networking work.
+Current intended real transport shape:
 
-### Phase 1: Microphone Capture Spike
+- reliable TCP control channel
+- UDP audio packets
+- explicit `hello` / `startStream` / `stopStream` / `keepAlive` messages
+- versioned packet envelope
 
-1. Request microphone permission.
-2. Configure `AVAudioSession` for voice capture.
-3. Capture mono microphone audio at the MVP format.
-4. Convert captured audio into a stable frame model.
-5. Add a simple input meter so capture quality can be inspected quickly.
+Near-term iOS objective:
 
-Definition of done:
+- implement `UdpRawPcm` first
+- keep payload format as raw PCM for now
+- match the existing Windows host protocol exactly
 
-- The app can capture live microphone audio on a real device.
-- Captured audio is framed consistently for transport.
-- The app can report basic input level and permission failures.
+This avoids introducing transport bugs and codec bugs at the same time.
 
-### Phase 2: Debug Transport Prototype
+## Codebase Reality
 
-1. Add a manual host address and port entry flow.
-2. Send raw PCM frames to the Windows host debug receiver.
-3. Add a simple connect, stream, stop, and reconnect lifecycle.
-4. Surface transport errors clearly enough to debug LAN issues.
-5. Verify the iPhone can continuously stream test audio to the host.
+These points should drive implementation planning:
 
-Definition of done:
+- `HostConfiguration.TransportMode` already exposes `tcpDebug` and `udpRealtime`.
+- `AppModel` still hard-blocks `udpRealtime` as “not implemented yet”.
+- the only concrete transport client is `DebugTcpPcmClient`
+- capture is already producing stable framed PCM data suitable for the current host
+- current app tests are written against a TCP-specific transport dependency surface
 
-- The app can stream live microphone audio to the Windows debug receiver.
-- The stream can recover from simple disconnects.
-- The app can tell the user whether the failure is capture, network, or host side.
+That means the next work is not “add audio capture”. It is “replace the TCP-only transport seam with a real transport seam and then implement the Phase 5 client”.
 
-### Phase 3: Session UX
+## Revised Task Breakdown
 
-1. Add a simple pairing or connection screen.
-2. Show the selected Windows host and connection state.
-3. Add mute, stream start/stop, and reconnect controls if needed.
-4. Show local input level and network health in a compact status view.
-5. Keep the first UI focused on clarity instead of polish.
+### Phase 0: Foundation Cleanup
 
-Definition of done:
-
-- A user can tell what the app is connected to.
-- The user can start and stop streaming without force-closing the app.
-- The app exposes enough state for day-to-day debugging.
-
-### Phase 4: Discovery and Pairing
-
-1. Decide whether the MVP uses manual IP entry, Bonjour discovery, or both.
-2. If discovery is added, advertise the Windows host and list discovered devices.
-3. Add a lightweight pairing or trust step if multiple hosts are possible.
-4. Store the selected host or pairing token locally.
-5. Keep fallback manual entry even if discovery is available.
+1. Replace the TCP-specific transport dependency seam in `AppModel` with a transport-agnostic client interface.
+2. Replace TCP-specific transport events with generic connection/session events.
+3. Keep `DebugTcpRawPcm` as a supported bring-up path during the transition.
+4. Preserve the current UI behavior while the internals change.
 
 Definition of done:
 
-- The user can find or enter the Windows host without guessing.
-- The app remembers the preferred host for the next session.
-- Pairing or trust is understandable without a separate setup wizard.
+- `AppModel` no longer depends on a TCP-specific client type.
+- Transport mode selection is a real implementation choice, not a placeholder UI toggle.
+- Existing TCP debug behavior still works.
 
-### Phase 5: Transport Hardening
+### Phase 1: Shared Client Protocol Model
 
-1. Add sequence numbers and packet timestamps on the client.
-2. Add transport acknowledgements or control messages if the protocol needs them.
-3. Add resilience for short network stalls and reconnect attempts.
-4. Move toward the real transport format if raw PCM is only for debug bring-up.
-5. Keep audio framing aligned with the Windows host jitter-buffer assumptions.
-
-Definition of done:
-
-- The client can tolerate small LAN hiccups without collapsing the session.
-- The packet model is stable enough for the Windows host robustness layer.
-- The transport path is ready to evolve away from debug-only PCM if needed.
-
-### Phase 6: Background and Interruptions
-
-1. Decide whether MVP requires background audio or foreground-only operation.
-2. Handle interruptions, route changes, and permission changes cleanly.
-3. Resume or stop streaming in a way that does not confuse the host.
-4. Keep user messaging explicit when capture is paused or blocked.
-5. Validate battery and thermal behavior during longer sessions.
+1. Add Swift models for the Phase 5 control messages.
+2. Add Swift models for the UDP audio packet envelope.
+3. Add serialization and deserialization helpers.
+4. Match the Windows host protocol version and required fields exactly.
+5. Add unit tests for encode/decode and malformed-message rejection.
 
 Definition of done:
 
-- The app behaves predictably across interruptions.
-- The user gets clear feedback when streaming is paused or stopped.
-- Long sessions remain usable on a real device.
+- The iOS client can construct valid Phase 5 control messages and audio packets.
+- Protocol tests cover round-trip serialization and common invalid cases.
+- The iOS contract stays aligned with the Windows host implementation.
 
-### Phase 7: Release Readiness
+### Phase 2: `UdpRawPcm` Transport Client
 
-1. Add crash-safe logging and diagnostics for support cases.
-2. Decide on TestFlight-only MVP distribution or a broader release path.
-3. Add onboarding text for microphone permission and local network requirements.
-4. Add a small troubleshooting view for host discovery and connection failures.
-5. Document setup expectations with the Windows host.
+1. Implement a TCP control client for `hello`, `startStream`, `keepAlive`, and `stopStream`.
+2. Implement a UDP sender for framed PCM packets.
+3. Use the host-provided negotiated audio port from `helloAccepted`.
+4. Add keepalive and session-timeout handling.
+5. Make disconnect and reconnect behavior explicit instead of implicit.
 
 Definition of done:
 
-- The app can be handed to a tester without extra verbal setup.
-- The common setup failures are visible in the app.
-- The release path is compatible with the Windows host MVP.
+- The iOS client can complete a full Phase 5 session handshake with the Windows host.
+- Live microphone frames can be sent over UDP after `startAccepted`.
+- The client detects and reports host rejection, disconnects, and timeouts clearly.
+
+### Phase 3: AppModel and UI Integration
+
+1. Make `connectAndStream()` branch on the selected transport mode.
+2. Remove the current `udpRealtime` “not implemented yet” block.
+3. Update transport status messages so they reflect:
+   - connecting control channel
+   - handshake accepted
+   - waiting for stream start
+   - streaming
+   - stopping
+   - transport error
+4. Keep the primary interaction simple: tap to start, tap to stop.
+5. Keep manual host entry as the default flow.
+
+Definition of done:
+
+- Selecting `UDP Realtime` in the UI actually uses the real transport path.
+- The app can stream to the Windows Phase 5 host without code changes.
+- The user can tell whether failure happened before connect, during handshake, or during streaming.
+
+### Phase 4: Diagnostics and Session Health
+
+1. Add iOS-side counters for:
+   - control messages sent
+   - control messages received
+   - frames sent
+   - bytes sent
+   - reconnect count
+   - last successful send
+   - last keepalive
+   - last transport error
+2. Surface these counters in the debug or diagnostics view first.
+3. Distinguish capture failures from transport failures in UI copy.
+4. Log state transitions in a way that can be compared against Windows host logs.
+
+Definition of done:
+
+- The app exposes enough state to debug normal LAN failures without Xcode attached.
+- iOS diagnostics can be correlated with Windows host structured logs.
+
+### Phase 5: Reconnect and Stall Resilience
+
+1. Add reconnect behavior after host disconnect or short LAN interruption.
+2. Decide whether reconnect should be automatic, manual, or bounded automatic retry for MVP.
+3. Preserve sequence-number and timestamp continuity rules deliberately.
+4. Avoid flooding the host with stale reconnect attempts.
+5. Keep capture lifecycle predictable while transport state changes.
+
+Definition of done:
+
+- Short transport failures do not leave the app in a confused half-connected state.
+- Reconnect behavior is predictable and diagnosable.
+
+### Phase 6: Background, Interruptions, and Route Changes
+
+1. Handle interruptions such as phone calls or route changes cleanly.
+2. Stop or pause transport explicitly when capture becomes invalid.
+3. Resume only when the app can do so predictably.
+4. Keep user-facing state clear during interruptions.
+
+Definition of done:
+
+- The host is not left waiting on a dead stream when iOS interrupts capture.
+- The user can tell why streaming paused or stopped.
+
+### Phase 7: Future Payload Work
+
+1. Introduce a payload decoder/encoder seam on iOS before adding Opus.
+2. Keep raw PCM as the first production transport payload until the real transport is stable.
+3. Only after transport stability is proven, evaluate Opus encode support.
+
+Definition of done:
+
+- The client is ready to evolve toward Opus without another transport rewrite.
 
 ## Recommended Build Order
 
-1. Phase 0: Client Foundation
-2. Phase 1: Microphone Capture Spike
-3. Phase 2: Debug Transport Prototype
-4. Phase 3: Session UX
-5. Phase 4: Discovery and Pairing
-6. Phase 5: Transport Hardening
-7. Phase 6: Background and Interruptions
-8. Phase 7: Release Readiness
+1. Phase 0: Foundation Cleanup
+2. Phase 1: Shared Client Protocol Model
+3. Phase 2: `UdpRawPcm` Transport Client
+4. Phase 3: AppModel and UI Integration
+5. Phase 4: Diagnostics and Session Health
+6. Phase 5: Reconnect and Stall Resilience
+7. Phase 6: Background, Interruptions, and Route Changes
+8. Phase 7: Future Payload Work
 
-## First Sprint
+## Immediate Catch-Up Plan
 
-These are the highest-value tasks to start immediately:
+These are the highest-value tasks to do next:
 
-1. Create the iOS app project structure and app shell.
-2. Configure microphone permission and voice-capture session setup.
-3. Capture mono microphone frames at the MVP format.
-4. Send raw PCM to the Windows debug receiver over the local network.
-5. Add basic connection and capture diagnostics.
+1. Refactor `AppModel` to depend on a transport-agnostic client interface.
+2. Port the current Windows Phase 5 protocol contract into Swift types and tests.
+3. Implement the `UdpRawPcm` client using Network.framework.
+4. Wire `udpRealtime` into the existing UI and status model.
+5. Verify end-to-end on a real iPhone against the Windows host in `UdpRawPcm` mode.
 
-## Open iOS Questions
+## Validation Targets
 
-1. Should the MVP transport stay as raw PCM for bring-up, or move to Opus earlier?
-2. Should discovery be manual IP first, Bonjour first, or both from the start?
-3. Should the app be foreground-only for MVP, or should background audio be considered part of the first release?
-4. What level of pairing or trust is needed before the Windows host is considered usable?
+Minimum validation for “iOS is up to speed”:
+
+1. The app can stream live microphone audio from a real iPhone to the Windows host over `UdpRawPcm`.
+2. The Windows host reports:
+   - accepted frames increasing
+   - zero protocol errors
+   - zero decode failures
+   - zero unexpected packet rejections in baseline runs
+3. The iOS app can stop and restart streaming without force-quitting.
+4. The iOS app can distinguish:
+   - microphone permission/configuration failure
+   - control-channel failure
+   - UDP streaming failure
+   - host rejection
+
+## Open Questions
+
+1. Should the iOS MVP keep both `DebugTcpRawPcm` and `UdpRawPcm`, or should debug TCP become a hidden/dev-only mode once realtime transport is stable?
+2. Do we want bounded automatic reconnect for MVP, or explicit manual reconnect only?
+3. Should host discovery remain manual-IP-first until the realtime transport is stable?
+4. When should Opus enter the plan: immediately after transport stabilization, or only after the iOS realtime path has been used for sustained testing?

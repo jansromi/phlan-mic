@@ -30,26 +30,18 @@ enum DebugTcpPcmClientError: LocalizedError {
     }
 }
 
-enum DebugTcpPcmClientEvent: Sendable {
-    case connecting
-    case ready
-    case failed(String)
-    case cancelled
-    case peerClosed
-}
-
 final class DebugTcpPcmClient: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.roba.phlanmic.ios-client.debug-tcp")
-    private let eventHandler: @Sendable (DebugTcpPcmClientEvent) -> Void
+    private let eventHandler: @Sendable (AudioTransportEvent) -> Void
 
     private var connection: NWConnection?
     private var isReady = false
 
-    init(eventHandler: @escaping @Sendable (DebugTcpPcmClientEvent) -> Void) {
+    init(eventHandler: @escaping @Sendable (AudioTransportEvent) -> Void) {
         self.eventHandler = eventHandler
     }
 
-    func connect(host: String, port: UInt16) throws {
+    func connect(host: String, port: UInt16, format _: MVPAudioFormat) throws {
         let trimmedHost = host.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedHost.isEmpty else {
             throw DebugTcpPcmClientError.invalidHost
@@ -81,7 +73,7 @@ final class DebugTcpPcmClient: @unchecked Sendable {
                 self.handleStateUpdate(state, for: connection)
             }
 
-            self.eventHandler(.connecting)
+            self.eventHandler(.stateChanged(.connecting, detail: "Opening TCP debug connection."))
             connection.start(queue: self.queue)
         }
     }
@@ -101,7 +93,7 @@ final class DebugTcpPcmClient: @unchecked Sendable {
         }
     }
 
-    func send(_ payload: Data, completion: @escaping @Sendable (Result<Int, Error>) -> Void) {
+    func send(_ frame: CapturedAudioFrame, completion: @escaping @Sendable (Result<Int, Error>) -> Void) {
         queue.async { [weak self] in
             guard let self else {
                 completion(.failure(DebugTcpPcmClientError.notConnected))
@@ -113,11 +105,11 @@ final class DebugTcpPcmClient: @unchecked Sendable {
                 return
             }
 
-            connection.send(content: payload, completion: .contentProcessed { error in
+            connection.send(content: frame.payload, completion: .contentProcessed { error in
                 if let error {
                     completion(.failure(DebugTcpPcmClientError.sendFailed(Self.describe(error))))
                 } else {
-                    completion(.success(payload.count))
+                    completion(.success(frame.payload.count))
                 }
             })
         }
@@ -130,20 +122,20 @@ final class DebugTcpPcmClient: @unchecked Sendable {
 
         switch state {
         case .setup, .preparing:
-            eventHandler(.connecting)
+            eventHandler(.stateChanged(.connecting, detail: "Opening TCP debug connection."))
         case .waiting(let error):
             finishConnection(connection)
             eventHandler(.failed(DebugTcpPcmClientError.connectionFailed(Self.describe(error)).localizedDescription))
         case .ready:
             isReady = true
-            eventHandler(.ready)
+            eventHandler(.stateChanged(.readyForAudio, detail: "TCP debug connection established. Starting microphone capture."))
             receiveDisconnectSignal(on: connection)
         case .failed(let error):
             finishConnection(connection)
             eventHandler(.failed(DebugTcpPcmClientError.connectionFailed(Self.describe(error)).localizedDescription))
         case .cancelled:
             finishConnection(connection)
-            eventHandler(.cancelled)
+            eventHandler(.stopped("TCP debug connection closed. Ready to reconnect."))
         @unknown default:
             break
         }
@@ -171,7 +163,7 @@ final class DebugTcpPcmClient: @unchecked Sendable {
 
             if isComplete {
                 self.finishConnection(connection)
-                self.eventHandler(.peerClosed)
+                self.eventHandler(.failed(DebugTcpPcmClientError.disconnectedByPeer.localizedDescription))
                 return
             }
 
@@ -209,5 +201,22 @@ final class DebugTcpPcmClient: @unchecked Sendable {
         @unknown default:
             error.localizedDescription
         }
+    }
+}
+
+extension DebugTcpPcmClient {
+    static func makeTransportClient(eventHandler: @escaping @Sendable (AudioTransportEvent) -> Void) -> AudioTransportClient {
+        let client = DebugTcpPcmClient(eventHandler: eventHandler)
+        return AudioTransportClient(
+            connect: { host, port, format in
+                try client.connect(host: host, port: port, format: format)
+            },
+            disconnect: {
+                client.disconnect()
+            },
+            sendFrame: { frame, completion in
+                client.send(frame, completion: completion)
+            }
+        )
     }
 }

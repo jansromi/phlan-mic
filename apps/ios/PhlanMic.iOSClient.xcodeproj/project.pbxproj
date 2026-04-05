@@ -19,6 +19,10 @@
 		A00000010000000000000010 /* DebugTcpPcmClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000011 /* DebugTcpPcmClient.swift */; };
 		A00000010000000000000011 /* AppModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000013 /* AppModelTests.swift */; };
 		A00000010000000000000012 /* XCTest.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A00000110000000000000012 /* XCTest.framework */; };
+		A00000010000000000000013 /* AudioTransportClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000015 /* AudioTransportClient.swift */; };
+		A00000010000000000000014 /* TransportProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000016 /* TransportProtocol.swift */; };
+		A00000010000000000000015 /* UdpRawPcmTransportClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000017 /* UdpRawPcmTransportClient.swift */; };
+		A00000010000000000000016 /* TransportProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000018 /* TransportProtocolTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +50,10 @@
 		A00000110000000000000012 /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = System/Library/Frameworks/XCTest.framework; sourceTree = SDKROOT; };
 		A00000110000000000000013 /* AppModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModelTests.swift; sourceTree = "<group>"; };
 		A00000110000000000000014 /* PhlanMic.iOSClientTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = PhlanMic.iOSClientTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000110000000000000015 /* AudioTransportClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTransportClient.swift; sourceTree = "<group>"; };
+		A00000110000000000000016 /* TransportProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProtocol.swift; sourceTree = "<group>"; };
+		A00000110000000000000017 /* UdpRawPcmTransportClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UdpRawPcmTransportClient.swift; sourceTree = "<group>"; };
+		A00000110000000000000018 /* TransportProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProtocolTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -128,8 +136,11 @@
 		A00000310000000000000007 /* Networking */ = {
 			isa = PBXGroup;
 			children = (
+				A00000110000000000000015 /* AudioTransportClient.swift */,
 				A00000110000000000000011 /* DebugTcpPcmClient.swift */,
 				A00000110000000000000007 /* HostConfiguration.swift */,
+				A00000110000000000000016 /* TransportProtocol.swift */,
+				A00000110000000000000017 /* UdpRawPcmTransportClient.swift */,
 			);
 			path = Networking;
 			sourceTree = "<group>";
@@ -146,6 +157,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000110000000000000013 /* AppModelTests.swift */,
+				A00000110000000000000018 /* TransportProtocolTests.swift */,
 			);
 			path = PhlanMic.iOSClientTests;
 			sourceTree = "<group>";
@@ -253,11 +265,14 @@
 				A00000010000000000000003 /* ContentView.swift in Sources */,
 				A00000010000000000000006 /* AppLogger.swift in Sources */,
 				A00000010000000000000004 /* AudioFormat.swift in Sources */,
+				A00000010000000000000013 /* AudioTransportClient.swift in Sources */,
 				A00000010000000000000007 /* HostConfiguration.swift in Sources */,
 				A00000010000000000000009 /* MicrophoneCaptureClient.swift in Sources */,
 				A00000010000000000000008 /* MicrophonePermissionClient.swift in Sources */,
 				A00000010000000000000010 /* DebugTcpPcmClient.swift in Sources */,
+				A00000010000000000000014 /* TransportProtocol.swift in Sources */,
 				A00000010000000000000001 /* PhlanMicIOSClientApp.swift in Sources */,
+				A00000010000000000000015 /* UdpRawPcmTransportClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -266,6 +281,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00000010000000000000011 /* AppModelTests.swift in Sources */,
+				A00000010000000000000016 /* TransportProtocolTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

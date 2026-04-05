@@ -1,10 +1,6 @@
 import Combine
 import Foundation
 
-private final class TransportEventRelay: @unchecked Sendable {
-    var handler: (@Sendable (DebugTcpPcmClientEvent) -> Void)?
-}
-
 @MainActor
 final class AppModel: ObservableObject {
     enum SetupStatus: String {
@@ -47,7 +43,9 @@ final class AppModel: ObservableObject {
     enum TransportStatus: String {
         case disconnected = "Disconnected"
         case connecting = "Connecting"
-        case connected = "Connected"
+        case controlConnected = "Control Connected"
+        case handshakeAccepted = "Handshake Accepted"
+        case connected = "Ready For Audio"
         case streaming = "Streaming"
         case stopping = "Stopping"
         case error = "Error"
@@ -56,7 +54,7 @@ final class AppModel: ObservableObject {
             switch self {
             case .disconnected:
                 "orange"
-            case .connecting, .stopping:
+            case .connecting, .controlConnected, .handshakeAccepted, .stopping:
                 "yellow"
             case .connected:
                 "blue"
@@ -69,7 +67,7 @@ final class AppModel: ObservableObject {
 
         var isActive: Bool {
             switch self {
-            case .connecting, .connected, .streaming, .stopping:
+            case .connecting, .controlConnected, .handshakeAccepted, .connected, .streaming, .stopping:
                 true
             case .disconnected, .error:
                 false
@@ -117,20 +115,16 @@ final class AppModel: ObservableObject {
             @escaping @Sendable (Error) -> Void
         ) throws -> MicrophoneCaptureStartup
         var stopCapture: () -> Void
-        var connectTransport: (String, UInt16) throws -> Void
-        var disconnectTransport: () -> Void
-        var sendTransportPayload: (Data, @escaping @Sendable (Result<Int, Error>) -> Void) -> Void
-        var setTransportEventHandler: (@escaping @Sendable (DebugTcpPcmClientEvent) -> Void) -> Void
+        var makeTransportClient: (
+            HostConfiguration.TransportMode,
+            @escaping @Sendable (AudioTransportEvent) -> Void
+        ) -> AudioTransportClient
         var log: (String) -> Void
 
         static func live() -> Dependencies {
             let permissionClient = MicrophonePermissionClient()
             let captureClient = MicrophoneCaptureClient()
             let logger = AppLogger()
-            let relay = TransportEventRelay()
-            let transportClient = DebugTcpPcmClient { event in
-                relay.handler?(event)
-            }
 
             return Dependencies(
                 currentPermissionStatus: {
@@ -150,17 +144,24 @@ final class AppModel: ObservableObject {
                 stopCapture: {
                     captureClient.stopCapture()
                 },
-                connectTransport: { host, port in
-                    try transportClient.connect(host: host, port: port)
-                },
-                disconnectTransport: {
-                    transportClient.disconnect()
-                },
-                sendTransportPayload: { payload, completion in
-                    transportClient.send(payload, completion: completion)
-                },
-                setTransportEventHandler: { handler in
-                    relay.handler = handler
+                makeTransportClient: { transportMode, handler in
+                    switch transportMode {
+                    case .tcpDebug:
+                        return DebugTcpPcmClient.makeTransportClient(eventHandler: handler)
+                    case .udpRealtime:
+                        let client = UdpRawPcmTransportClient(eventHandler: handler)
+                        return AudioTransportClient(
+                            connect: { host, port, format in
+                                try client.connect(host: host, port: port, format: format)
+                            },
+                            disconnect: {
+                                client.disconnect()
+                            },
+                            sendFrame: { frame, completion in
+                                client.send(frame, completion: completion)
+                            }
+                        )
+                    }
                 },
                 log: { message in
                     logger.log(message)
@@ -200,20 +201,21 @@ final class AppModel: ObservableObject {
     @Published var transportDetail = "Connect to the Windows host to start streaming."
     @Published var transportFramesSent = 0
     @Published var transportBytesSent = 0
+    @Published var transportControlMessagesSent = 0
+    @Published var transportControlMessagesReceived = 0
+    @Published var transportReconnectCount = 0
     @Published var lastSuccessfulSendTime: Date?
+    @Published var lastKeepAliveTime: Date?
     @Published var lastTransportError = "No transport errors."
     @Published var presentedSheet: PresentedSheet?
 
     private let dependencies: Dependencies
+    private var currentTransportClient: AudioTransportClient?
     private var captureOwnedByTransport = false
+    private var transportAttemptCount = 0
 
     init(dependencies: Dependencies = .live()) {
         self.dependencies = dependencies
-        dependencies.setTransportEventHandler { [weak self] event in
-            Task { @MainActor in
-                self?.handleTransportEvent(event)
-            }
-        }
 
         log("App model initialized.")
         refreshSetupReadiness()
@@ -247,7 +249,7 @@ final class AppModel: ObservableObject {
             return "Streaming Live"
         }
 
-        if transportStatus == .connecting || transportStatus == .connected || transportStatus == .stopping {
+        if transportStatus.isActive && transportStatus != .streaming {
             return transportStatus.rawValue
         }
 
@@ -274,13 +276,17 @@ final class AppModel: ObservableObject {
 
         switch transportStatus {
         case .connecting:
-            return "Connecting to \(hostConfiguration.displayEndpoint)."
+            return activeTransportStatusDetail(fallback: "Connecting to \(hostConfiguration.displayEndpoint).")
+        case .controlConnected:
+            return activeTransportStatusDetail(fallback: "Control channel connected. Beginning transport handshake.")
+        case .handshakeAccepted:
+            return activeTransportStatusDetail(fallback: "Handshake accepted. Waiting for realtime stream start.")
         case .connected:
-            return "Connection established. Waiting for audio frames."
+            return activeTransportStatusDetail(fallback: "Transport ready. Starting microphone capture.")
         case .streaming:
             return "Streaming voice audio to \(hostConfiguration.displayEndpoint). Tap the mic again to stop."
         case .stopping:
-            return "Stopping the current session."
+            return activeTransportStatusDetail(fallback: "Stopping the current session.")
         case .error:
             return transportDetail
         case .disconnected:
@@ -335,13 +341,17 @@ final class AppModel: ObservableObject {
         if transportStatus.isActive {
             switch transportStatus {
             case .connecting:
-                return "Opening the socket to the Windows host."
+                return activeTransportStatusDetail(fallback: "Opening the transport connection to the Windows host.")
+            case .controlConnected:
+                return activeTransportStatusDetail(fallback: "The control channel is open and the handshake is in progress.")
+            case .handshakeAccepted:
+                return activeTransportStatusDetail(fallback: "The host accepted the handshake and is preparing the stream.")
             case .connected:
-                return "Connected to the host and preparing audio."
+                return activeTransportStatusDetail(fallback: "The transport path is ready and the audio pipeline is starting.")
             case .streaming:
                 return "Live session is active. Tap to edit host settings."
             case .stopping:
-                return "Shutting down the live session."
+                return activeTransportStatusDetail(fallback: "Shutting down the live session.")
             case .disconnected, .error:
                 break
             }
@@ -378,6 +388,14 @@ final class AppModel: ObservableObject {
         }
 
         return lastSuccessfulSendTime.formatted(date: .omitted, time: .standard)
+    }
+
+    var lastKeepAliveSummary: String {
+        guard let lastKeepAliveTime else {
+            return "No keepalive sent yet."
+        }
+
+        return lastKeepAliveTime.formatted(date: .omitted, time: .standard)
     }
 
     var sessionHealthItems: [SessionHealthItem] {
@@ -422,7 +440,7 @@ final class AppModel: ObservableObject {
             return "Streaming to \(hostConfiguration.displayEndpoint)."
         }
 
-        if transportStatus == .connecting || transportStatus == .connected || transportStatus == .stopping {
+        if transportStatus.isActive && transportStatus != .streaming {
             return transportDetail
         }
 
@@ -490,15 +508,11 @@ final class AppModel: ObservableObject {
     }
 
     func refreshSetupReadiness() {
-        guard hostConfiguration.transportMode == .tcpDebug else {
-            setupStatus = .setupRequired
-            setupDetail = "UDP Realtime is not implemented yet. Switch back to TCP Debug for the current Windows host."
-            return
-        }
-
         guard let validatedPort = hostConfiguration.validatedPort else {
             setupStatus = .setupRequired
-            setupDetail = "Enter a valid TCP port between 1 and 65535."
+            setupDetail = hostConfiguration.transportMode == .udpRealtime
+                ? "Enter a valid realtime control port between 1 and 65535."
+                : "Enter a valid TCP port between 1 and 65535."
             return
         }
 
@@ -509,7 +523,7 @@ final class AppModel: ObservableObject {
         }
 
         setupStatus = .ready
-        setupDetail = "Ready to stream to \(hostConfiguration.trimmedHostAddress):\(validatedPort)."
+        setupDetail = "Ready to stream to \(hostConfiguration.trimmedHostAddress):\(validatedPort) over \(hostConfiguration.transportMode.label)."
     }
 
     func updateHostAddress(_ hostAddress: String) {
@@ -556,7 +570,7 @@ final class AppModel: ObservableObject {
 
         guard setupStatus == .ready else {
             presentedSheet = .hostSettings
-            log("TCP debug connect attempted before setup was ready.")
+            log("\(hostConfiguration.transportMode.label) connect attempted before setup was ready.")
             return
         }
 
@@ -568,30 +582,43 @@ final class AppModel: ObservableObject {
 
         if captureStatus == .starting || captureStatus == .capturing {
             stopCapture(
-                reason: "Capture stopped so the TCP debug stream can restart cleanly.",
-                logMessage: "Stopped the existing capture session before starting TCP debug streaming."
+                reason: "Capture stopped so the transport session can restart cleanly.",
+                logMessage: "Stopped the existing capture session before starting \(hostConfiguration.transportMode.label) streaming."
             )
         }
 
         transportFramesSent = 0
         transportBytesSent = 0
+        transportControlMessagesSent = 0
+        transportControlMessagesReceived = 0
         lastSuccessfulSendTime = nil
+        lastKeepAliveTime = nil
         lastTransportError = "No transport errors."
         captureOwnedByTransport = false
+        transportAttemptCount += 1
+        transportReconnectCount = max(0, transportAttemptCount - 1)
         transportStatus = .connecting
-        transportDetail = "Opening TCP debug connection to \(hostConfiguration.displayEndpoint)."
+        transportDetail = initialTransportConnectDetail
 
-        log("Connecting to the Windows debug TCP receiver at \(hostConfiguration.displayEndpoint).")
+        log("Connecting to the Windows host at \(hostConfiguration.displayEndpoint) using \(hostConfiguration.transportMode.label).")
+
+        let transportClient = dependencies.makeTransportClient(hostConfiguration.transportMode) { [weak self] event in
+            Task { @MainActor in
+                self?.handleTransportEvent(event)
+            }
+        }
+        currentTransportClient = transportClient
 
         do {
-            try dependencies.connectTransport(
+            try transportClient.connect(
                 hostConfiguration.trimmedHostAddress,
-                hostConfiguration.validatedPort ?? HostConfiguration.defaultDebugTcpPort
+                hostConfiguration.validatedPort ?? HostConfiguration.defaultDebugTcpPort,
+                .defaultVoice
             )
         } catch {
             handleTransportFailure(
                 detail: error.localizedDescription,
-                logMessage: "TCP debug connect failed: \(error.localizedDescription)"
+                logMessage: "\(hostConfiguration.transportMode.label) connect failed: \(error.localizedDescription)"
             )
         }
     }
@@ -602,8 +629,8 @@ final class AppModel: ObservableObject {
         }
 
         transportStatus = .stopping
-        transportDetail = "Stopping microphone capture and closing the TCP debug socket."
-        log("Stopping the TCP debug stream.")
+        transportDetail = stoppingTransportDetail
+        log("Stopping the \(hostConfiguration.transportMode.label) session.")
 
         if captureStatus == .starting || captureStatus == .capturing {
             stopCapture(
@@ -613,7 +640,7 @@ final class AppModel: ObservableObject {
         }
 
         captureOwnedByTransport = false
-        dependencies.disconnectTransport()
+        currentTransportClient?.disconnect()
     }
 
     func log(_ message: String) {
@@ -651,6 +678,10 @@ final class AppModel: ObservableObject {
             return "Live"
         case .connecting:
             return "Joining"
+        case .controlConnected:
+            return "Control"
+        case .handshakeAccepted:
+            return "Handshake"
         case .connected:
             return "Linked"
         case .stopping:
@@ -676,8 +707,12 @@ final class AppModel: ObservableObject {
             return "The session is live and microphone audio is reaching \(hostConfiguration.displayEndpoint)."
         case .connecting:
             return "The app is opening a connection to \(hostConfiguration.displayEndpoint)."
+        case .controlConnected:
+            return activeTransportStatusDetail(fallback: "The TCP control channel is open and the host handshake is underway.")
+        case .handshakeAccepted:
+            return activeTransportStatusDetail(fallback: "The host accepted the handshake and the realtime stream is starting.")
         case .connected:
-            return "The host connection is open and the audio pipeline is starting."
+            return activeTransportStatusDetail(fallback: "The host transport is ready and the audio pipeline is starting.")
         case .stopping:
             return "The current session is shutting down cleanly."
         case .error:
@@ -691,7 +726,7 @@ final class AppModel: ObservableObject {
 
     private var sessionHealthSentValue: String {
         switch transportStatus {
-        case .connecting, .connected:
+        case .connecting, .controlConnected, .handshakeAccepted, .connected:
             return "Waiting"
         case .streaming:
             return transportFramesSent == 0 ? "Starting" : "\(transportFramesSent)"
@@ -710,7 +745,7 @@ final class AppModel: ObservableObject {
             return "red"
         case .streaming:
             return "green"
-        case .connecting, .connected, .stopping:
+        case .connecting, .controlConnected, .handshakeAccepted, .connected, .stopping:
             return "yellow"
         case .disconnected:
             return transportFramesSent > 0 ? "blue" : "slate"
@@ -732,7 +767,7 @@ final class AppModel: ObservableObject {
             switch transportStatus {
             case .error:
                 return "Failed"
-            case .connecting, .connected:
+            case .connecting, .controlConnected, .handshakeAccepted, .connected:
                 return "Pending"
             case .streaming:
                 return "Pending"
@@ -766,21 +801,50 @@ final class AppModel: ObservableObject {
         return "The latest confirmed send completed at \(lastSuccessfulSendTime.formatted(date: .omitted, time: .standard))."
     }
 
+    private var initialTransportConnectDetail: String {
+        switch hostConfiguration.transportMode {
+        case .tcpDebug:
+            return "Opening TCP debug connection to \(hostConfiguration.displayEndpoint)."
+        case .udpRealtime:
+            return "Opening TCP control channel to \(hostConfiguration.displayEndpoint)."
+        }
+    }
+
+    private var stoppingTransportDetail: String {
+        switch hostConfiguration.transportMode {
+        case .tcpDebug:
+            return "Stopping microphone capture and closing the TCP debug socket."
+        case .udpRealtime:
+            return "Stopping microphone capture and closing the realtime control session."
+        }
+    }
+
+    private var streamingTransportDetail: String {
+        switch hostConfiguration.transportMode {
+        case .tcpDebug:
+            return "Streaming raw PCM to \(hostConfiguration.displayEndpoint)."
+        case .udpRealtime:
+            return "Streaming realtime raw PCM to the Windows host."
+        }
+    }
+
+    private func activeTransportStatusDetail(fallback: String) -> String {
+        transportDetail.isEmpty ? fallback : transportDetail
+    }
+
     private var hostSetupHint: String {
         switch setupStatus {
         case .ready:
             return "Ready to stream to \(hostConfiguration.displayEndpoint)."
         case .setupRequired:
-            if hostConfiguration.transportMode != .tcpDebug {
-                return "UDP Realtime is not available yet. Use TCP Debug for now."
-            }
-
             if hostConfiguration.trimmedHostAddress.isEmpty {
                 return "Add your Windows host IP address to continue."
             }
 
             if hostConfiguration.validatedPort == nil {
-                return "Enter the TCP port used by the Windows host."
+                return hostConfiguration.transportMode == .udpRealtime
+                    ? "Enter the TCP control port used by the Windows host."
+                    : "Enter the TCP port used by the Windows host."
             }
 
             return "Finish the Windows host details to start streaming."
@@ -811,7 +875,7 @@ final class AppModel: ObservableObject {
 
         captureStatus = .starting
         captureDetail = streamToTransport
-            ? "Configuring AVAudioSession for TCP debug streaming."
+            ? "Configuring AVAudioSession for \(hostConfiguration.transportMode.label) streaming."
             : "Configuring AVAudioSession and starting the microphone tap."
         captureSessionSummary = streamToTransport ? "Starting stream capture." : "Starting capture."
         latestInputLevel = .silence
@@ -840,11 +904,11 @@ final class AppModel: ObservableObject {
 
             captureStatus = .capturing
             captureDetail = streamToTransport
-                ? "Live microphone capture is feeding the TCP debug stream at \(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) ms packet cadence."
+                ? "Live microphone capture is feeding the \(hostConfiguration.transportMode.label) stream at \(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) ms packet cadence."
                 : "Live microphone capture is running at \(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) ms packet cadence."
             captureSessionSummary = startup.debugSummary
             if streamToTransport {
-                log("Microphone capture started for TCP debug streaming. \(startup.debugSummary)")
+                log("Microphone capture started for \(hostConfiguration.transportMode.label) streaming. \(startup.debugSummary)")
             } else {
                 log("Microphone capture started. \(startup.debugSummary)")
             }
@@ -857,7 +921,7 @@ final class AppModel: ObservableObject {
             if streamToTransport {
                 captureOwnedByTransport = false
                 handleTransportFailure(
-                    detail: "TCP debug connection opened but microphone capture failed: \(error.localizedDescription)",
+                    detail: "\(hostConfiguration.transportMode.label) transport opened but microphone capture failed: \(error.localizedDescription)",
                     logMessage: "Microphone capture failed to start for streaming: \(error.localizedDescription)"
                 )
             } else {
@@ -886,7 +950,7 @@ final class AppModel: ObservableObject {
             return
         }
 
-        dependencies.sendTransportPayload(frame.payload) { [weak self] result in
+        currentTransportClient?.sendFrame(frame) { [weak self] result in
             Task { @MainActor in
                 self?.handleSendCompletion(result, for: frame)
             }
@@ -910,39 +974,56 @@ final class AppModel: ObservableObject {
         }
     }
 
-    private func handleTransportEvent(_ event: DebugTcpPcmClientEvent) {
+    private func handleTransportEvent(_ event: AudioTransportEvent) {
         switch event {
-        case .connecting:
-            guard transportStatus == .connecting else {
-                return
-            }
+        case .stateChanged(let lifecycleState, let detail):
+            switch lifecycleState {
+            case .connecting:
+                guard transportStatus == .connecting else {
+                    return
+                }
 
-            transportDetail = "Opening TCP debug connection to \(hostConfiguration.displayEndpoint)."
-        case .ready:
-            guard transportStatus == .connecting else {
-                return
-            }
+                transportDetail = detail
+            case .controlConnected:
+                transportStatus = .controlConnected
+                transportDetail = detail
+                log(detail)
+            case .handshakeAccepted:
+                transportStatus = .handshakeAccepted
+                transportDetail = detail
+                log(detail)
+            case .readyForAudio:
+                guard transportStatus != .stopping else {
+                    return
+                }
 
-            transportStatus = .connected
-            transportDetail = "TCP debug connection established. Starting microphone capture."
-            captureOwnedByTransport = true
-            log("TCP debug connection established to \(hostConfiguration.displayEndpoint).")
+                transportStatus = .connected
+                transportDetail = detail
+                captureOwnedByTransport = true
+                log(detail)
 
-            Task {
-                await startCapturePipeline(streamToTransport: true)
+                Task {
+                    await startCapturePipeline(streamToTransport: true)
+                }
             }
+        case .controlMessageSent:
+            transportControlMessagesSent += 1
+        case .controlMessageReceived:
+            transportControlMessagesReceived += 1
+        case .keepAliveSent(let date):
+            lastKeepAliveTime = date
         case .failed(let detail):
-            handleTransportFailure(detail: detail, logMessage: "TCP debug transport failed: \(detail)")
-        case .peerClosed:
-            handleTransportFailure(
-                detail: DebugTcpPcmClientError.disconnectedByPeer.localizedDescription,
-                logMessage: "The Windows debug receiver closed the TCP connection."
-            )
-        case .cancelled:
+            handleTransportFailure(detail: detail, logMessage: "\(hostConfiguration.transportMode.label) transport failed: \(detail)")
+        case .stopped(let detail):
+            currentTransportClient = nil
+            captureOwnedByTransport = false
             if transportStatus == .stopping {
                 transportStatus = .disconnected
-                transportDetail = "TCP debug connection closed. Ready to reconnect."
-                log("TCP debug connection closed.")
+                transportDetail = detail
+                log(detail)
+            } else if transportStatus != .error {
+                transportStatus = .disconnected
+                transportDetail = detail
             }
         }
     }
@@ -960,8 +1041,8 @@ final class AppModel: ObservableObject {
 
             if transportStatus == .connected {
                 transportStatus = .streaming
-                transportDetail = "Streaming raw PCM to \(hostConfiguration.displayEndpoint)."
-                log("Raw PCM streaming started with microphone frame \(frame.sequenceNumber).")
+                transportDetail = streamingTransportDetail
+                log("Streaming started with microphone frame \(frame.sequenceNumber) over \(hostConfiguration.transportMode.label).")
             } else if transportFramesSent.isMultiple(of: 250) {
                 log("Streaming health: \(transportFramesSent) frames / \(transportBytesSent) bytes sent to \(hostConfiguration.displayEndpoint).")
             }
@@ -982,11 +1063,13 @@ final class AppModel: ObservableObject {
         }
 
         captureOwnedByTransport = false
+        let transportClient = currentTransportClient
+        currentTransportClient = nil
         transportStatus = .error
         transportDetail = detail
         lastTransportError = detail
         log(logMessage)
-        dependencies.disconnectTransport()
+        transportClient?.disconnect()
     }
 
     private func stopCapture(reason: String, logMessage: String?) {

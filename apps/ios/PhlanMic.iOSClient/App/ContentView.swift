@@ -456,7 +456,7 @@ private struct HostSettingsView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
 
-                Text("Windows debug receiver default: \(HostConfiguration.defaultDebugTcpPort)")
+                Text("Windows control/debug port default: \(HostConfiguration.defaultDebugTcpPort)")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -564,7 +564,11 @@ private struct DebugView: View {
                 KeyValueRow(label: "Endpoint", value: model.hostConfiguration.displayEndpoint)
                 KeyValueRow(label: "Frames Sent", value: "\(model.transportFramesSent)")
                 KeyValueRow(label: "Bytes Sent", value: "\(model.transportBytesSent)")
+                KeyValueRow(label: "Control Sent", value: "\(model.transportControlMessagesSent)")
+                KeyValueRow(label: "Control Received", value: "\(model.transportControlMessagesReceived)")
+                KeyValueRow(label: "Reconnects", value: "\(model.transportReconnectCount)")
                 KeyValueRow(label: "Last Send", value: model.lastSuccessfulSendSummary)
+                KeyValueRow(label: "Last Keepalive", value: model.lastKeepAliveSummary)
                 KeyValueRow(label: "Last Error", value: model.lastTransportError)
             }
 
