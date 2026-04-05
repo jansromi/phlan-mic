@@ -77,6 +77,7 @@ public sealed class UdpRawPcmReceiver : IAudioInputSource
                 }
                 catch (Exception exception) when (!runtimeCancellation.IsCancellationRequested)
                 {
+                    ClearActiveSession();
                     tracker.MarkFaulted(DateTimeOffset.UtcNow, exception.Message);
                     tracker.MarkListening(localEndpoint, DateTimeOffset.UtcNow, "Awaiting the next control client.");
 

@@ -5,4 +5,12 @@
 .env_notes_win
 docs/.env_notes
 
-apps/ios/PhlanMic.iOSClient.xcodeproj/project.xcworkspace/xcuserdata/roba.xcuserdatad/UserInterfaceState.xcuserstate
+# Xcode user-specific state
+*.xcuserstate
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.xccheckout
+*.xcscmblueprint
+xcuserdata/

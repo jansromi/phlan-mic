@@ -186,7 +186,9 @@ final class MicrophoneCaptureClient {
     private func configureSession(for format: MVPAudioFormat) throws {
         let packetDurationSeconds = TimeInterval(format.packetDurationMilliseconds) / 1_000
 
-        try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetoothHFP, .defaultToSpeaker])
+        // We only uplink microphone audio. Voice chat processing can sound
+        // aggressively gated or "choppy" even when transport is perfect.
+        try session.setCategory(.record, mode: .measurement, options: [])
         try? session.setPreferredInputNumberOfChannels(format.channelCount)
         try session.setPreferredSampleRate(Double(format.sampleRate))
         try session.setPreferredIOBufferDuration(packetDurationSeconds)
