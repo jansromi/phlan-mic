@@ -1,0 +1,336 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A00000010000000000000001 /* PhlanMicIOSClientApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000001 /* PhlanMicIOSClientApp.swift */; };
+		A00000010000000000000002 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000002 /* AppModel.swift */; };
+		A00000010000000000000003 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000003 /* ContentView.swift */; };
+		A00000010000000000000004 /* AudioFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000004 /* AudioFormat.swift */; };
+		A00000010000000000000005 /* AudioPacket.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000005 /* AudioPacket.swift */; };
+		A00000010000000000000006 /* AppLogger.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000006 /* AppLogger.swift */; };
+		A00000010000000000000007 /* HostConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000007 /* HostConfiguration.swift */; };
+		A00000010000000000000008 /* MicrophonePermissionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000008 /* MicrophonePermissionClient.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A00000110000000000000001 /* PhlanMicIOSClientApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhlanMicIOSClientApp.swift; sourceTree = "<group>"; };
+		A00000110000000000000002 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		A00000110000000000000003 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A00000110000000000000004 /* AudioFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFormat.swift; sourceTree = "<group>"; };
+		A00000110000000000000005 /* AudioPacket.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPacket.swift; sourceTree = "<group>"; };
+		A00000110000000000000006 /* AppLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogger.swift; sourceTree = "<group>"; };
+		A00000110000000000000007 /* HostConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostConfiguration.swift; sourceTree = "<group>"; };
+		A00000110000000000000008 /* MicrophonePermissionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophonePermissionClient.swift; sourceTree = "<group>"; };
+		A00000110000000000000009 /* PhlanMic.iOSClient.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = PhlanMic.iOSClient.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00000210000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00000310000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				A00000310000000000000002 /* PhlanMic.iOSClient */,
+				A00000310000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00000310000000000000002 /* PhlanMic.iOSClient */ = {
+			isa = PBXGroup;
+			children = (
+				A00000310000000000000004 /* App */,
+				A00000310000000000000005 /* Audio */,
+				A00000310000000000000006 /* Diagnostics */,
+				A00000310000000000000007 /* Networking */,
+				A00000310000000000000008 /* Permissions */,
+			);
+			path = PhlanMic.iOSClient;
+			sourceTree = "<group>";
+		};
+		A00000310000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000009 /* PhlanMic.iOSClient.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000310000000000000004 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000001 /* PhlanMicIOSClientApp.swift */,
+				A00000110000000000000002 /* AppModel.swift */,
+				A00000110000000000000003 /* ContentView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		A00000310000000000000005 /* Audio */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000004 /* AudioFormat.swift */,
+				A00000110000000000000005 /* AudioPacket.swift */,
+			);
+			path = Audio;
+			sourceTree = "<group>";
+		};
+		A00000310000000000000006 /* Diagnostics */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000006 /* AppLogger.swift */,
+			);
+			path = Diagnostics;
+			sourceTree = "<group>";
+		};
+		A00000310000000000000007 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000007 /* HostConfiguration.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		A00000310000000000000008 /* Permissions */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000008 /* MicrophonePermissionClient.swift */,
+			);
+			path = Permissions;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000410000000000000001 /* PhlanMic.iOSClient */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000810000000000000001 /* Build configuration list for PBXNativeTarget "PhlanMic.iOSClient" */;
+			buildPhases = (
+				A00000610000000000000001 /* Sources */,
+				A00000210000000000000001 /* Frameworks */,
+				A00000710000000000000001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = PhlanMic.iOSClient;
+			productName = PhlanMic.iOSClient;
+			productReference = A00000110000000000000009 /* PhlanMic.iOSClient.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000510000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 2603;
+				LastUpgradeCheck = 2603;
+				TargetAttributes = {
+					A00000410000000000000001 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+				};
+			};
+			buildConfigurationList = A00000810000000000000002 /* Build configuration list for PBXProject "PhlanMic.iOSClient" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A00000310000000000000001;
+			productRefGroup = A00000310000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00000410000000000000001 /* PhlanMic.iOSClient */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00000710000000000000001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000610000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000010000000000000002 /* AppModel.swift in Sources */,
+				A00000010000000000000005 /* AudioPacket.swift in Sources */,
+				A00000010000000000000003 /* ContentView.swift in Sources */,
+				A00000010000000000000006 /* AppLogger.swift in Sources */,
+				A00000010000000000000004 /* AudioFormat.swift in Sources */,
+				A00000010000000000000007 /* HostConfiguration.swift in Sources */,
+				A00000010000000000000008 /* MicrophonePermissionClient.swift in Sources */,
+				A00000010000000000000001 /* PhlanMicIOSClientApp.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A00000910000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+			};
+			name = Debug;
+		};
+		A00000910000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+		A00000910000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGNING_ALLOWED = NO;
+				CODE_SIGNING_REQUIRED = NO;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PhlanMic;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "PhlanMic uses the microphone to stream voice audio to your Windows host.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.roba.phlanmic.iosclient;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A00000910000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = PhlanMic;
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "PhlanMic uses the microphone to stream voice audio to your Windows host.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.roba.phlanmic.iosclient;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00000810000000000000001 /* Build configuration list for PBXNativeTarget "PhlanMic.iOSClient" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000910000000000000003 /* Debug */,
+				A00000910000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		A00000810000000000000002 /* Build configuration list for PBXProject "PhlanMic.iOSClient" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000910000000000000001 /* Debug */,
+				A00000910000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000510000000000000001 /* Project object */;
+}
