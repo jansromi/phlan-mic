@@ -58,15 +58,14 @@ internal sealed class MainForm : Form
         startButton.Click += async (_, _) => await StartRuntimeAsync();
         stopButton.Click += async (_, _) => await StopRuntimeAsync();
         copyButton.Click += (_, _) => CopyManualConnect();
-        Shown += async (_, _) =>
+        Shown += (_, _) =>
         {
             this.logger.Info("ui_window_shown", "The Windows host UI window is visible.", new Dictionary<string, object?>
             {
                 ["configPath"] = this.configPath
             });
-            await StartRuntimeAsync();
         };
-        snapshotRefreshTimer.Tick += (_, _) => FlushPendingSnapshot();
+        snapshotRefreshTimer.Tick += (_, _) => SafeFlushPendingSnapshot();
 
         runtime.SnapshotChanged += OnSnapshotChanged;
         QueueSnapshot(runtime.Snapshot);
@@ -341,6 +340,23 @@ internal sealed class MainForm : Form
         }
 
         ApplySnapshot(snapshot);
+    }
+
+    private void SafeFlushPendingSnapshot()
+    {
+        try
+        {
+            FlushPendingSnapshot();
+        }
+        catch (Exception exception)
+        {
+            logger.Error("ui_snapshot_apply_failed", "Applying a runtime snapshot to the desktop UI failed.", exception, new Dictionary<string, object?>
+            {
+                ["hasPendingSnapshot"] = pendingSnapshot is not null,
+                ["lastAppliedReadinessState"] = lastAppliedSnapshot?.Readiness.State.ToString(),
+                ["lastAppliedSessionState"] = lastAppliedSnapshot?.Session.State.ToString()
+            });
+        }
     }
 
     private void ApplySnapshot(WindowsHostRuntimeSnapshot snapshot)

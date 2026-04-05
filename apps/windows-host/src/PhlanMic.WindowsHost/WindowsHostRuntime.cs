@@ -50,6 +50,7 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
     {
         TaskCompletionSource<bool>? startupCompletion;
         WindowsHostRuntimeSnapshot? nextSnapshot = null;
+        CancellationToken backgroundCancellationToken = cancellationToken;
 
         lock (syncRoot)
         {
@@ -65,6 +66,7 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
 
             backgroundCancellation?.Dispose();
             backgroundCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            backgroundCancellationToken = backgroundCancellation.Token;
             startupCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             lastRobustnessState = null;
             logger.Info("host_runtime_start_requested", "Starting the Windows host runtime.", new Dictionary<string, object?>
@@ -86,11 +88,18 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                 snapshot.Statistics,
                 AudioOutputSnapshot.Empty(config.Output.Mode),
                 fault: null);
-
-            backgroundTask = RunHostLoopAsync(backgroundCancellation.Token, startupCompletion, rethrowFaults: false);
         }
 
         PublishSnapshot(nextSnapshot);
+        lock (syncRoot)
+        {
+            if (backgroundTask is null)
+            {
+                backgroundTask = Task.Run(
+                    () => RunHostLoopAsync(backgroundCancellationToken, startupCompletion, rethrowFaults: false),
+                    CancellationToken.None);
+            }
+        }
         _ = await startupCompletion.Task.ConfigureAwait(false);
     }
 
