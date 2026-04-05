@@ -33,6 +33,8 @@ The console host and desktop host now share the same runtime layer. The console 
 - live session / stream counters
 - troubleshooting diagnostics without parsing structured logs
 
+When you launch `PhlanMic.WindowsHost.Ui` from `powershell.exe` or `cmd.exe`, the desktop window still opens and structured logs are also written back to that terminal session.
+
 Environment overrides use the `PHLANMIC__` prefix. Example:
 
 ```powershell

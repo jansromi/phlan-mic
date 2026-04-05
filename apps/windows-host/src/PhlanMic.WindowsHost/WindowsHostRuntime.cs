@@ -55,6 +55,11 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
         {
             if (backgroundTask is { IsCompleted: false })
             {
+                logger.Debug("host_runtime_start_ignored", "Start was requested while the runtime was already active.", new Dictionary<string, object?>
+                {
+                    ["readinessState"] = snapshot.Readiness.State.ToString(),
+                    ["sessionState"] = snapshot.Session.State.ToString()
+                });
                 return;
             }
 
@@ -62,6 +67,13 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             backgroundCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             startupCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             lastRobustnessState = null;
+            logger.Info("host_runtime_start_requested", "Starting the Windows host runtime.", new Dictionary<string, object?>
+            {
+                ["sessionName"] = config.SessionName,
+                ["transportMode"] = config.Receiver.TransportMode,
+                ["outputMode"] = config.Output.Mode,
+                ["configSessionName"] = config.SessionName
+            });
             nextSnapshot = BuildSnapshot(
                 new HostReadinessSnapshot(
                     HostReadinessState.Starting,
@@ -92,6 +104,10 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             taskToWait = backgroundTask;
             if (taskToWait is null || taskToWait.IsCompleted)
             {
+                logger.Debug("host_runtime_stop_noop", "Stop was requested while the runtime was already stopped.", new Dictionary<string, object?>
+                {
+                    ["readinessState"] = snapshot.Readiness.State.ToString()
+                });
                 nextSnapshot = BuildSnapshot(
                     new HostReadinessSnapshot(
                         HostReadinessState.Stopped,
@@ -107,6 +123,12 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             }
             else
             {
+                logger.Info("host_runtime_stop_requested", "Stopping the Windows host runtime.", new Dictionary<string, object?>
+                {
+                    ["sessionState"] = snapshot.Session.State.ToString(),
+                    ["connectionCount"] = snapshot.Session.ConnectionCount,
+                    ["disconnectCount"] = snapshot.Session.DisconnectCount
+                });
                 nextSnapshot = BuildSnapshot(
                     new HostReadinessSnapshot(
                         HostReadinessState.Stopping,
@@ -984,16 +1006,75 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             return;
         }
 
+        WindowsHostRuntimeSnapshot previousSnapshot;
         WindowsHostRuntimeSnapshot publishedSnapshot;
         EventHandler<WindowsHostRuntimeSnapshot>? handler;
 
         lock (syncRoot)
         {
+            previousSnapshot = snapshot;
             snapshot = nextSnapshot;
             publishedSnapshot = snapshot;
             handler = SnapshotChanged;
         }
 
+        LogSnapshotTransition(previousSnapshot, publishedSnapshot);
         handler?.Invoke(this, publishedSnapshot);
+    }
+
+    private void LogSnapshotTransition(
+        WindowsHostRuntimeSnapshot previousSnapshot,
+        WindowsHostRuntimeSnapshot nextSnapshot)
+    {
+        if (previousSnapshot.Readiness.State != nextSnapshot.Readiness.State ||
+            !string.Equals(previousSnapshot.Readiness.Summary, nextSnapshot.Readiness.Summary, StringComparison.Ordinal))
+        {
+            logger.Info("host_readiness_changed", "Host readiness changed.", new Dictionary<string, object?>
+            {
+                ["previousState"] = previousSnapshot.Readiness.State.ToString(),
+                ["state"] = nextSnapshot.Readiness.State.ToString(),
+                ["summary"] = nextSnapshot.Readiness.Summary,
+                ["detail"] = nextSnapshot.Readiness.Detail
+            });
+        }
+
+        if (previousSnapshot.Output.State != nextSnapshot.Output.State ||
+            !string.Equals(previousSnapshot.Output.DeviceName, nextSnapshot.Output.DeviceName, StringComparison.Ordinal) ||
+            !string.Equals(previousSnapshot.Output.EndpointId, nextSnapshot.Output.EndpointId, StringComparison.Ordinal))
+        {
+            logger.Info("host_output_readiness_changed", "Output readiness changed.", new Dictionary<string, object?>
+            {
+                ["previousState"] = previousSnapshot.Output.State.ToString(),
+                ["state"] = nextSnapshot.Output.State.ToString(),
+                ["mode"] = nextSnapshot.Output.Mode,
+                ["deviceName"] = nextSnapshot.Output.DeviceName,
+                ["endpointId"] = nextSnapshot.Output.EndpointId,
+                ["captureEndpointName"] = nextSnapshot.Output.PairedCaptureEndpointName,
+                ["summary"] = nextSnapshot.Output.Summary
+            });
+        }
+
+        if (previousSnapshot.Diagnostics.Count != nextSnapshot.Diagnostics.Count)
+        {
+            logger.Debug("host_diagnostics_changed", "Diagnostics count changed.", new Dictionary<string, object?>
+            {
+                ["previousCount"] = previousSnapshot.Diagnostics.Count,
+                ["count"] = nextSnapshot.Diagnostics.Count,
+                ["sessionState"] = nextSnapshot.Session.State.ToString(),
+                ["readinessState"] = nextSnapshot.Readiness.State.ToString()
+            });
+        }
+
+        if ((previousSnapshot.Fault is null) != (nextSnapshot.Fault is null) ||
+            !string.Equals(previousSnapshot.Fault?.Detail, nextSnapshot.Fault?.Detail, StringComparison.Ordinal))
+        {
+            logger.Debug("host_fault_snapshot_changed", "Fault snapshot changed.", new Dictionary<string, object?>
+            {
+                ["hadFault"] = previousSnapshot.Fault is not null,
+                ["hasFault"] = nextSnapshot.Fault is not null,
+                ["summary"] = nextSnapshot.Fault?.Summary,
+                ["detail"] = nextSnapshot.Fault?.Detail
+            });
+        }
     }
 }

@@ -7,6 +7,7 @@ namespace PhlanMic.WindowsHost.Ui;
 internal sealed class MainForm : Form
 {
     private readonly WindowsHostRuntime runtime;
+    private readonly StructuredConsoleLogger logger;
     private readonly string configPath;
     private readonly Label stateValueLabel;
     private readonly Label summaryValueLabel;
@@ -18,11 +19,13 @@ internal sealed class MainForm : Form
     private readonly TextBox outputTextBox;
     private readonly TextBox sessionTextBox;
     private readonly TextBox diagnosticsTextBox;
+    private WindowsHostRuntimeSnapshot? lastAppliedSnapshot;
     private bool changingRuntimeState;
 
-    public MainForm(WindowsHostRuntime runtime, string configPath)
+    public MainForm(WindowsHostRuntime runtime, StructuredConsoleLogger logger, string configPath)
     {
         this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.configPath = configPath ?? throw new ArgumentNullException(nameof(configPath));
 
         Text = "PhlanMic Windows Host";
@@ -46,7 +49,14 @@ internal sealed class MainForm : Form
         startButton.Click += async (_, _) => await StartRuntimeAsync();
         stopButton.Click += async (_, _) => await StopRuntimeAsync();
         copyButton.Click += (_, _) => CopyManualConnect();
-        Shown += async (_, _) => await StartRuntimeAsync();
+        Shown += async (_, _) =>
+        {
+            this.logger.Info("ui_window_shown", "The Windows host UI window is visible.", new Dictionary<string, object?>
+            {
+                ["configPath"] = this.configPath
+            });
+            await StartRuntimeAsync();
+        };
 
         runtime.SnapshotChanged += OnSnapshotChanged;
         ApplySnapshot(runtime.Snapshot);
@@ -54,6 +64,11 @@ internal sealed class MainForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        logger.Info("ui_window_closing", "The Windows host UI window is closing.", new Dictionary<string, object?>
+        {
+            ["readinessState"] = runtime.Snapshot.Readiness.State.ToString(),
+            ["sessionState"] = runtime.Snapshot.Session.State.ToString()
+        });
         runtime.SnapshotChanged -= OnSnapshotChanged;
         runtime.DisposeAsync().AsTask().GetAwaiter().GetResult();
         base.OnFormClosed(e);
@@ -194,10 +209,19 @@ internal sealed class MainForm : Form
         {
             changingRuntimeState = true;
             UpdateButtons(runtime.Snapshot);
+            logger.Info("ui_start_requested", "Start host was requested from the desktop UI.", new Dictionary<string, object?>
+            {
+                ["configPath"] = configPath,
+                ["currentState"] = runtime.Snapshot.Readiness.State.ToString()
+            });
             await runtime.StartAsync();
         }
         catch (Exception exception)
         {
+            logger.Error("ui_start_failed", "The desktop UI failed to start the host runtime.", exception, new Dictionary<string, object?>
+            {
+                ["configPath"] = configPath
+            });
             MessageBox.Show(
                 $"Failed to start the host.\r\n\r\n{exception.Message}",
                 Text,
@@ -222,10 +246,19 @@ internal sealed class MainForm : Form
         {
             changingRuntimeState = true;
             UpdateButtons(runtime.Snapshot);
+            logger.Info("ui_stop_requested", "Stop host was requested from the desktop UI.", new Dictionary<string, object?>
+            {
+                ["currentState"] = runtime.Snapshot.Readiness.State.ToString(),
+                ["connectionCount"] = runtime.Snapshot.Session.ConnectionCount
+            });
             await runtime.StopAsync();
         }
         catch (Exception exception)
         {
+            logger.Error("ui_stop_failed", "The desktop UI failed to stop the host runtime cleanly.", exception, new Dictionary<string, object?>
+            {
+                ["configPath"] = configPath
+            });
             MessageBox.Show(
                 $"Failed to stop the host cleanly.\r\n\r\n{exception.Message}",
                 Text,
@@ -243,10 +276,17 @@ internal sealed class MainForm : Form
     {
         try
         {
+            logger.Info("ui_copy_manual_connect", "Copy manual connect details was requested from the desktop UI.", new Dictionary<string, object?>
+            {
+                ["connectionHost"] = runtime.Snapshot.ManualConnect.ConnectionHost,
+                ["controlPort"] = runtime.Snapshot.ManualConnect.ControlPort,
+                ["transportMode"] = runtime.Snapshot.ManualConnect.TransportMode
+            });
             Clipboard.SetText(runtime.Snapshot.ManualConnect.GetCopyText());
         }
         catch (Exception exception)
         {
+            logger.Error("ui_copy_manual_connect_failed", "Failed to copy manual connect details from the desktop UI.", exception);
             MessageBox.Show(
                 $"Failed to copy manual connect details.\r\n\r\n{exception.Message}",
                 Text,
@@ -273,6 +313,7 @@ internal sealed class MainForm : Form
 
     private void ApplySnapshot(WindowsHostRuntimeSnapshot snapshot)
     {
+        var previousSnapshot = lastAppliedSnapshot;
         stateValueLabel.Text = snapshot.Readiness.State.ToString();
         stateValueLabel.ForeColor = GetStateColor(snapshot.Readiness.State);
         summaryValueLabel.Text = snapshot.Readiness.Detail is null
@@ -285,6 +326,20 @@ internal sealed class MainForm : Form
         sessionTextBox.Text = BuildSessionText(snapshot);
         diagnosticsTextBox.Text = BuildDiagnosticsText(snapshot);
 
+        if (previousSnapshot is not null &&
+            (previousSnapshot.Readiness.State != snapshot.Readiness.State ||
+            previousSnapshot.Session.State != snapshot.Session.State))
+        {
+            logger.Debug("ui_snapshot_applied", "Applied a new runtime snapshot to the desktop UI.", new Dictionary<string, object?>
+            {
+                ["readinessState"] = snapshot.Readiness.State.ToString(),
+                ["sessionState"] = snapshot.Session.State.ToString(),
+                ["outputState"] = snapshot.Output.State.ToString(),
+                ["diagnosticCount"] = snapshot.Diagnostics.Count
+            });
+        }
+
+        lastAppliedSnapshot = snapshot;
         UpdateButtons(snapshot);
     }
 

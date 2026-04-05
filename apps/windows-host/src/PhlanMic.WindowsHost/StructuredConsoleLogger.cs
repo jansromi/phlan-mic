@@ -48,6 +48,12 @@ public sealed class StructuredConsoleLogger
 
     public StructuredConsoleLogFormat OutputFormat { get; set; } = StructuredConsoleLogFormat.Text;
 
+    public void Trace(string eventName, string message, IReadOnlyDictionary<string, object?>? properties = null) =>
+        Write(StructuredLogLevel.Trace, eventName, message, null, properties);
+
+    public void Debug(string eventName, string message, IReadOnlyDictionary<string, object?>? properties = null) =>
+        Write(StructuredLogLevel.Debug, eventName, message, null, properties);
+
     public void Info(string eventName, string message, IReadOnlyDictionary<string, object?>? properties = null) =>
         Write(StructuredLogLevel.Information, eventName, message, null, properties);
 
