@@ -108,9 +108,9 @@ internal sealed class MainForm : Form
             RowCount = 4
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 37.5f));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 37.5f));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
 
         root.Controls.Add(BuildHeaderPanel(), 0, 0);
         root.Controls.Add(BuildTopSections(), 0, 1);
@@ -199,12 +199,17 @@ internal sealed class MainForm : Form
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowAndShrink,
             ColumnCount = 1,
             RowCount = 1
         };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(signalMeterControl, 0, 0);
-        return BuildSection("Audio Activity", layout);
+        var section = BuildSection("Audio Activity", layout);
+        section.AutoSize = true;
+        section.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        return section;
     }
 
     private static GroupBox BuildSection(string title, Control content)
