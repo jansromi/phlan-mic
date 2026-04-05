@@ -23,7 +23,7 @@ internal sealed class MainForm : Form
     private readonly TextBox sessionTextBox;
     private readonly TextBox diagnosticsTextBox;
     private readonly AudioLevelMeterControl signalMeterControl;
-    private readonly Label signalStatusLabel;
+    private readonly TextBox signalDetailsTextBox;
     private readonly System.Windows.Forms.Timer snapshotRefreshTimer;
     private WindowsHostRuntimeSnapshot? lastAppliedSnapshot;
     private WindowsHostRuntimeSnapshot? pendingSnapshot;
@@ -60,7 +60,10 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Top,
             Margin = new Padding(0, 0, 0, 8)
         };
-        signalStatusLabel = CreateValueLabel(new Font("Cascadia Mono", 9f, FontStyle.Regular));
+        signalDetailsTextBox = CreateMultilineTextBox();
+        signalDetailsTextBox.Height = 88;
+        signalDetailsTextBox.ScrollBars = ScrollBars.None;
+        signalDetailsTextBox.WordWrap = true;
         snapshotRefreshTimer = new System.Windows.Forms.Timer
         {
             Interval = (int)SnapshotRefreshInterval.TotalMilliseconds,
@@ -107,21 +110,34 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             Padding = new Padding(12),
-            RowCount = 5
+            RowCount = 4
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 20f));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 20f));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 60f));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 100f));
 
         root.Controls.Add(BuildHeaderPanel(), 0, 0);
-        root.Controls.Add(BuildSection("Manual Connect", manualConnectTextBox), 0, 1);
-        root.Controls.Add(BuildSection("Output Readiness", outputTextBox), 0, 2);
-        root.Controls.Add(BuildAudioActivitySection(), 0, 3);
-        root.Controls.Add(BuildBottomSections(), 0, 4);
+        root.Controls.Add(BuildTopSections(), 0, 1);
+        root.Controls.Add(BuildAudioActivitySection(), 0, 2);
+        root.Controls.Add(BuildBottomSections(), 0, 3);
 
         return root;
+    }
+
+    private Control BuildTopSections()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            AutoSize = true
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50f));
+        layout.Controls.Add(BuildSection("Manual Connect", manualConnectTextBox), 0, 0);
+        layout.Controls.Add(BuildSection("Output Readiness", outputTextBox), 1, 0);
+        return layout;
     }
 
     private Control BuildHeaderPanel()
@@ -196,7 +212,7 @@ internal sealed class MainForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(signalMeterControl, 0, 0);
-        layout.Controls.Add(signalStatusLabel, 0, 1);
+        layout.Controls.Add(signalDetailsTextBox, 0, 1);
         return BuildSection("Audio Activity", layout);
     }
 
@@ -532,7 +548,7 @@ internal sealed class MainForm : Form
             signalMeter.DisplayPeakNormalized,
             signalMeter.SignalDetected,
             signalMeter.ClippedSampleCount > 0);
-        signalStatusLabel.Text = BuildSignalStatusText(snapshot.Session.State, signalMeter);
+        signalDetailsTextBox.Text = BuildSignalDetailsText(snapshot.Session.State, signalMeter);
     }
 
     private static Color GetStateColor(HostReadinessState state) =>
@@ -548,7 +564,7 @@ internal sealed class MainForm : Form
     private static string FormatTimestamp(DateTimeOffset? value) =>
         value?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "n/a";
 
-    private static string BuildSignalStatusText(StreamSessionState sessionState, AudioLevelMeterSnapshot signalMeter)
+    private static string BuildSignalDetailsText(StreamSessionState sessionState, AudioLevelMeterSnapshot signalMeter)
     {
         var status = sessionState switch
         {
@@ -562,16 +578,13 @@ internal sealed class MainForm : Form
             _ => "Starting"
         };
 
-        return string.Join(
-            "   ",
-            new[]
-            {
-                $"Status: {status}",
-                $"Peak: {FormatPercent(signalMeter.DisplayPeakNormalized)}",
-                $"RMS: {FormatPercent(signalMeter.RmsNormalized)}",
-                $"Clipped: {signalMeter.ClippedSampleCount}",
-                $"Last Signal: {FormatTimestamp(signalMeter.LastSignalAtUtc)}"
-            });
+        return new StringBuilder()
+            .AppendLine($"Status: {status}")
+            .AppendLine($"Peak: {FormatPercent(signalMeter.DisplayPeakNormalized)}")
+            .AppendLine($"RMS: {FormatPercent(signalMeter.RmsNormalized)}")
+            .AppendLine($"Clipped Samples: {signalMeter.ClippedSampleCount}")
+            .Append($"Last Signal: {FormatTimestamp(signalMeter.LastSignalAtUtc)}")
+            .ToString();
     }
 
     private static string FormatPercent(double value) => $"{Math.Round(Math.Max(0, Math.Min(1, value)) * 100):0}%";
