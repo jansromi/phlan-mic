@@ -1,5 +1,9 @@
 import SwiftUI
 
+private enum SessionLayout {
+    static let panelWidth: CGFloat = 360
+}
+
 struct ContentView: View {
     @ObservedObject var model: AppModel
 
@@ -58,6 +62,7 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 ConnectionStatusCard(model: model)
+                    .frame(maxWidth: SessionLayout.panelWidth)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
             }
@@ -180,7 +185,7 @@ private struct MeterPanel: View {
             )
         }
         .padding(20)
-        .frame(maxWidth: 360)
+        .frame(maxWidth: SessionLayout.panelWidth)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
