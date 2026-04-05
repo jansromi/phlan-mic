@@ -9,7 +9,31 @@ public sealed class HostRuntimeConfigTests
     {
         var config = new HostRuntimeConfig();
 
+        Assert.Equal("Text", config.LogFormat);
         config.Validate();
+    }
+
+    [Fact]
+    public void ValidateAcceptsJsonLogFormat()
+    {
+        var config = new HostRuntimeConfig
+        {
+            LogFormat = "Json"
+        };
+
+        config.Validate();
+    }
+
+    [Fact]
+    public void ValidateRejectsUnsupportedLogFormat()
+    {
+        var config = new HostRuntimeConfig
+        {
+            LogFormat = "Xml"
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("log format", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

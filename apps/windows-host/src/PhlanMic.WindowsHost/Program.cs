@@ -8,6 +8,7 @@ try
     var loader = new HostConfigLoader();
     var config = loader.Load(configPath);
     logger.MinimumLevel = StructuredLogLevelParser.Parse(config.LogLevel);
+    logger.OutputFormat = StructuredConsoleLogFormatParser.Parse(config.LogFormat);
     using var cancellation = new CancellationTokenSource();
 
     Console.CancelKeyPress += (_, eventArgs) =>

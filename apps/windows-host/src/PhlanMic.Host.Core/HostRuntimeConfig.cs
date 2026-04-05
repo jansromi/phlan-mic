@@ -6,6 +6,8 @@ public sealed record HostRuntimeConfig
 
     public string LogLevel { get; init; } = "Information";
 
+    public string LogFormat { get; init; } = "Text";
+
     public ReceiverConfig Receiver { get; init; } = new();
 
     public StreamBufferConfig Buffer { get; init; } = new();
@@ -28,6 +30,17 @@ public sealed record HostRuntimeConfig
         if (string.IsNullOrWhiteSpace(LogLevel))
         {
             throw new InvalidOperationException("Log level must be provided.");
+        }
+
+        if (string.IsNullOrWhiteSpace(LogFormat))
+        {
+            throw new InvalidOperationException("Log format must be provided.");
+        }
+
+        if (!string.Equals(LogFormat, "Text", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(LogFormat, "Json", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException($"Log format '{LogFormat}' is not supported.");
         }
 
         Receiver.Validate();

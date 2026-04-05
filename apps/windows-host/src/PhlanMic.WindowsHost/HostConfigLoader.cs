@@ -35,6 +35,7 @@ internal sealed class HostConfigLoader
     {
         var sessionName = GetEnvironmentValue("SESSIONNAME") ?? config.SessionName;
         var logLevel = GetEnvironmentValue("LOGLEVEL") ?? config.LogLevel;
+        var logFormat = GetEnvironmentValue("LOGFORMAT") ?? config.LogFormat;
         var bindAddress = GetEnvironmentValue("RECEIVER__BINDADDRESS") ?? config.Receiver.BindAddress;
         var transportMode = GetEnvironmentValue("RECEIVER__TRANSPORTMODE") ?? config.Receiver.TransportMode;
         var port = ParseInt("RECEIVER__PORT") ?? config.Receiver.Port;
@@ -62,6 +63,7 @@ internal sealed class HostConfigLoader
         {
             SessionName = sessionName,
             LogLevel = logLevel,
+            LogFormat = logFormat,
             Receiver = config.Receiver with
             {
                 BindAddress = bindAddress,

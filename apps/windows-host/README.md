@@ -3,7 +3,7 @@
 Projects:
 
 - `src/PhlanMic.Host.Core`: transport-agnostic audio format, buffering, and stream pipeline primitives.
-- `src/PhlanMic.WindowsHost`: Windows-only startup, config loading, and structured console logging.
+- `src/PhlanMic.WindowsHost`: Windows-only startup, config loading, and readable console logging with optional JSON mode.
 - `src/PhlanMic.DebugTcpSender`: small debug sender for exercising the raw PCM TCP receiver.
 - `tests/PhlanMic.Host.Core.Tests`: core tests with no Windows-only dependencies.
 
@@ -27,6 +27,7 @@ Environment overrides use the `PHLANMIC__` prefix. Example:
 
 ```powershell
 $env:PHLANMIC__RECEIVER__PORT = "43000"
+$env:PHLANMIC__LOGFORMAT = "Json"
 dotnet run --project src/PhlanMic.WindowsHost
 ```
 
@@ -82,6 +83,7 @@ $env:PHLANMIC__OUTPUT__MODE = "DebugDrain"
 $env:PHLANMIC__OUTPUT__DEVICEID = "1"
 $env:PHLANMIC__OUTPUT__ENDPOINTID = "{0.0.0.00000000}.{example-endpoint-guid}"
 $env:PHLANMIC__OUTPUT__TARGETLATENCYMS = "60"
+$env:PHLANMIC__LOGFORMAT = "Json"
 ```
 
 Phase 3 VB-CABLE mode:
@@ -112,6 +114,8 @@ dotnet run --project src/PhlanMic.WindowsHost
 Phase 2 smoke harness:
 
 Run the Windows-only smoke script to start the host, wait for `host_ready`, stream a fixed-duration test signal, and assert from structured logs that playback started, robustness counters were emitted, and the session completed without a faulted host state:
+
+The host defaults to human-readable text logs. The smoke script forces `PHLANMIC__LOGFORMAT=Json` so it can continue parsing exact event payloads.
 
 ```powershell
 cd apps/windows-host
