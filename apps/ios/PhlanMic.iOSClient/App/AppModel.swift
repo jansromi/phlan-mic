@@ -883,6 +883,7 @@ final class AppModel: ObservableObject {
         latestFrameSummary = "Waiting for the first framed packet."
 
         do {
+            let transportClient = currentTransportClient
             let startup = try dependencies.startCapture(
                 .defaultVoice,
                 { [weak self] inputLevel in
@@ -891,6 +892,14 @@ final class AppModel: ObservableObject {
                     }
                 },
                 { [weak self] frame in
+                    if streamToTransport {
+                        transportClient?.sendFrame(frame) { [weak self] result in
+                            Task { @MainActor in
+                                self?.handleSendCompletion(result, for: frame)
+                            }
+                        }
+                    }
+
                     Task { @MainActor in
                         self?.handleCapturedFrame(frame, streamToTransport: streamToTransport)
                     }
@@ -946,15 +955,6 @@ final class AppModel: ObservableObject {
             }
         }
 
-        guard streamToTransport else {
-            return
-        }
-
-        currentTransportClient?.sendFrame(frame) { [weak self] result in
-            Task { @MainActor in
-                self?.handleSendCompletion(result, for: frame)
-            }
-        }
     }
 
     private func handleCaptureFailure(_ error: Error) {
@@ -1006,10 +1006,16 @@ final class AppModel: ObservableObject {
                     await startCapturePipeline(streamToTransport: true)
                 }
             }
-        case .controlMessageSent:
+        case .controlMessageSent(let messageType):
             transportControlMessagesSent += 1
-        case .controlMessageReceived:
+            if messageType != .keepAlive {
+                log("Control message sent: \(messageType.rawValue).")
+            }
+        case .controlMessageReceived(let messageType):
             transportControlMessagesReceived += 1
+            if messageType != .keepAlive {
+                log("Control message received: \(messageType.rawValue).")
+            }
         case .keepAliveSent(let date):
             lastKeepAliveTime = date
         case .failed(let detail):

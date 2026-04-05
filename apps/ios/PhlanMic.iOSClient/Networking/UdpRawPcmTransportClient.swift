@@ -88,7 +88,7 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
             let controlConnection = NWConnection(
                 host: NWEndpoint.Host(trimmedHost),
                 port: endpointPort,
-                using: .tcp
+                using: Self.tcpParameters()
             )
 
             self.controlConnection = controlConnection
@@ -521,6 +521,12 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
         @unknown default:
             error.localizedDescription
         }
+    }
+
+    private static func tcpParameters() -> NWParameters {
+        let options = NWProtocolTCP.Options()
+        options.noDelay = true
+        return NWParameters(tls: nil, tcp: options)
     }
 }
 

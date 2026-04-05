@@ -61,7 +61,11 @@ final class DebugTcpPcmClient: @unchecked Sendable {
                 return
             }
 
-            let connection = NWConnection(host: NWEndpoint.Host(trimmedHost), port: endpointPort, using: .tcp)
+            let connection = NWConnection(
+                host: NWEndpoint.Host(trimmedHost),
+                port: endpointPort,
+                using: Self.tcpParameters()
+            )
             self.connection = connection
             self.isReady = false
 
@@ -201,6 +205,12 @@ final class DebugTcpPcmClient: @unchecked Sendable {
         @unknown default:
             error.localizedDescription
         }
+    }
+
+    private static func tcpParameters() -> NWParameters {
+        let options = NWProtocolTCP.Options()
+        options.noDelay = true
+        return NWParameters(tls: nil, tcp: options)
     }
 }
 
