@@ -8,8 +8,8 @@ struct PhlanMicIOSClientApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView(model: model)
-                .onChange(of: scenePhase) { nextPhase in
-                    model.handleScenePhaseChange(nextPhase)
+                .onChange(of: scenePhase) {
+                    model.handleScenePhaseChange(scenePhase)
                 }
         }
     }

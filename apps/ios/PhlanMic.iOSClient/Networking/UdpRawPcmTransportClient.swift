@@ -58,6 +58,7 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
     private var disconnectRequested = false
     private var terminalEventEmitted = false
     private var captureEpoch: Date?
+    private var controlConnectionIsReady = false
 
     init(eventHandler: @escaping @Sendable (AudioTransportEvent) -> Void) {
         self.eventHandler = eventHandler
@@ -114,7 +115,11 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
             self.disconnectRequested = true
             self.stopKeepAliveTimer()
 
-            if let sessionID = self.negotiatedSessionID, let controlConnection = self.controlConnection {
+            if
+                let sessionID = self.negotiatedSessionID,
+                let controlConnection = self.controlConnection,
+                self.controlConnectionIsReady
+            {
                 self.sendControlMessage(
                     .stopStream(sessionID: sessionID, detail: "iOS client requested stream stop."),
                     over: controlConnection
@@ -192,6 +197,7 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
         keepAliveIntervalMs = Self.defaultKeepAliveIntervalMs
         sessionTimeoutMs = Self.defaultSessionTimeoutMs
         captureEpoch = nil
+        controlConnectionIsReady = false
     }
 
     private func handleControlStateUpdate(
@@ -208,14 +214,18 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
         case .setup, .preparing:
             emit(.stateChanged(.connecting, detail: "Opening TCP control channel to \(host):\(port)."))
         case .ready:
+            controlConnectionIsReady = true
             emit(.stateChanged(.controlConnected, detail: "TCP control channel connected. Sending hello."))
             receiveControlMessages(on: connection)
             sendHello(over: connection)
         case .waiting(let error):
+            controlConnectionIsReady = false
             fail(with: UdpRawPcmTransportClientError.controlConnectionFailed(Self.describe(error)).localizedDescription)
         case .failed(let error):
+            controlConnectionIsReady = false
             fail(with: UdpRawPcmTransportClientError.controlConnectionFailed(Self.describe(error)).localizedDescription)
         case .cancelled:
+            controlConnectionIsReady = false
             if disconnectRequested {
                 emitTerminalIfNeeded(.stopped("Realtime transport stopped."))
             } else {
@@ -466,6 +476,9 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
     }
 
     private func closeConnections() {
+        controlConnectionIsReady = false
+        udpConnection?.stateUpdateHandler = nil
+        controlConnection?.stateUpdateHandler = nil
         udpConnection?.cancel()
         controlConnection?.cancel()
         udpConnection = nil

@@ -62,9 +62,9 @@ enum CaptureRouteChangeReason: String, Sendable, Equatable {
 
     var shouldStopRunningCaptureWhenInputRemainsAvailable: Bool {
         switch self {
-        case .oldDeviceUnavailable, .categoryChange, .noSuitableRouteForCategory, .routeConfigurationChange:
+        case .oldDeviceUnavailable, .noSuitableRouteForCategory:
             true
-        case .unknown, .newDeviceAvailable, .override, .wakeFromSleep:
+        case .unknown, .newDeviceAvailable, .categoryChange, .override, .wakeFromSleep, .routeConfigurationChange:
             false
         }
     }
@@ -473,7 +473,7 @@ final class AppModel: ObservableObject {
         }
 
         if captureStatus == .capturing && !captureOwnedByTransport {
-            return "Debug Capture Active"
+            return "Stopped"
         }
 
         if shouldSurfaceLifecycleStop {
@@ -517,7 +517,7 @@ final class AppModel: ObservableObject {
         }
 
         if captureStatus == .capturing && !captureOwnedByTransport {
-            return "Standalone capture is active from the debug view."
+            return "Streaming is stopped. Debug capture is still running from the debug view."
         }
 
         if shouldSurfaceLifecycleStop {

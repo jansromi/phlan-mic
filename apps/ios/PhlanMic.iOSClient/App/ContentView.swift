@@ -4,8 +4,34 @@ private enum SessionLayout {
     static let panelWidth: CGFloat = 360
 }
 
+private enum AppPalette {
+    static let backgroundStart = Color(.sRGB, red: 0.95, green: 0.97, blue: 0.99)
+    static let backgroundMid = Color(.sRGB, red: 0.90, green: 0.94, blue: 0.97)
+    static let backgroundEnd = Color(.sRGB, red: 0.98, green: 0.94, blue: 0.90)
+    static let backgroundCoolAccent = Color(.sRGB, red: 0.78, green: 0.87, blue: 0.94)
+    static let backgroundWarmAccent = Color(.sRGB, red: 0.93, green: 0.82, blue: 0.72)
+    static let meterLow = Color(.sRGB, red: 0.16, green: 0.55, blue: 0.76)
+    static let meterMid = Color(.sRGB, red: 0.29, green: 0.70, blue: 0.40)
+    static let statusOrange = Color(.sRGB, red: 0.96, green: 0.52, blue: 0.12)
+    static let statusBlue = Color(.sRGB, red: 0.11, green: 0.45, blue: 0.87)
+    static let statusYellow = Color(.sRGB, red: 0.95, green: 0.76, blue: 0.06)
+    static let statusGreen = Color(.sRGB, red: 0.18, green: 0.68, blue: 0.38)
+    static let statusRed = Color(.sRGB, red: 0.86, green: 0.20, blue: 0.18)
+    static let slate = Color(.sRGB, red: 0.25, green: 0.35, blue: 0.43)
+}
+
+private enum StatusLabelAnimation {
+    static let connectingFrames = [
+        "Connecting .",
+        "Connecting ..",
+        "Connecting ...",
+        "Connecting"
+    ]
+}
+
 struct ContentView: View {
     @ObservedObject var model: AppModel
+    @State private var connectingTextStep = 0
 
     var body: some View {
         NavigationStack {
@@ -26,7 +52,7 @@ struct ContentView: View {
                         .buttonStyle(.plain)
 
                         VStack(spacing: 8) {
-                            Text(model.primaryStatusTitle)
+                            Text(animatedConnectingText(for: model.primaryStatusTitle))
                                 .font(.system(size: 28, weight: .bold, design: .rounded))
                                 .multilineTextAlignment(.center)
 
@@ -62,7 +88,10 @@ struct ContentView: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                ConnectionStatusCard(model: model)
+                ConnectionStatusCard(
+                    model: model,
+                    statusLabel: animatedConnectingText(for: model.connectionCardStatusLabel)
+                )
                     .frame(maxWidth: SessionLayout.panelWidth)
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
@@ -88,6 +117,31 @@ struct ContentView: View {
         .task {
             await model.loadStartupState()
         }
+        .task(id: model.transportStatus) {
+            if model.transportStatus != .connecting {
+                connectingTextStep = 0
+                return
+            }
+
+            connectingTextStep = 0
+
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 450_000_000)
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                connectingTextStep = (connectingTextStep + 1) % StatusLabelAnimation.connectingFrames.count
+            }
+        }
+    }
+
+    private func animatedConnectingText(for text: String) -> String {
+        guard model.transportStatus == .connecting, text == AppModel.TransportStatus.connecting.rawValue else {
+            return text
+        }
+
+        return StatusLabelAnimation.connectingFrames[connectingTextStep]
     }
 }
 
@@ -96,9 +150,9 @@ private struct SessionBackground: View {
         ZStack {
             LinearGradient(
                 colors: [
-                    Color(red: 0.95, green: 0.97, blue: 0.99),
-                    Color(red: 0.90, green: 0.94, blue: 0.97),
-                    Color(red: 0.98, green: 0.94, blue: 0.90)
+                    AppPalette.backgroundStart,
+                    AppPalette.backgroundMid,
+                    AppPalette.backgroundEnd
                 ],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -112,13 +166,13 @@ private struct SessionBackground: View {
                 .offset(x: -110, y: -240)
 
             Circle()
-                .fill(Color(red: 0.78, green: 0.87, blue: 0.94).opacity(0.55))
+                .fill(AppPalette.backgroundCoolAccent.opacity(0.55))
                 .frame(width: 220, height: 220)
                 .blur(radius: 18)
                 .offset(x: 120, y: -120)
 
             Circle()
-                .fill(Color(red: 0.93, green: 0.82, blue: 0.72).opacity(0.35))
+                .fill(AppPalette.backgroundWarmAccent.opacity(0.35))
                 .frame(width: 260, height: 260)
                 .blur(radius: 24)
                 .offset(x: 120, y: 280)
@@ -236,19 +290,20 @@ private struct LevelMeterRow: View {
 
     private var meterColors: [Color] {
         if value > 0.8 {
-            return [.orange, .red]
+            return [AppPalette.statusOrange, AppPalette.statusRed]
         }
 
         if value > 0.4 {
-            return [.green, .orange]
+            return [AppPalette.statusGreen, AppPalette.statusOrange]
         }
 
-        return [Color(red: 0.29, green: 0.70, blue: 0.40), Color(red: 0.16, green: 0.55, blue: 0.76)]
+        return [AppPalette.meterMid, AppPalette.meterLow]
     }
 }
 
 private struct ConnectionStatusCard: View {
     @ObservedObject var model: AppModel
+    let statusLabel: String
 
     var body: some View {
         Button {
@@ -261,7 +316,7 @@ private struct ConnectionStatusCard: View {
                             .fill(StatusTint.color(named: model.connectionCardTintName))
                             .frame(width: 10, height: 10)
 
-                        Text(model.connectionCardStatusLabel)
+                        Text(statusLabel)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(StatusTint.color(named: model.connectionCardTintName))
                     }
@@ -327,6 +382,8 @@ private struct SessionHealthPanel: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
@@ -720,7 +777,7 @@ private struct MeterRow: View {
             }
 
             ProgressView(value: Double(max(0, min(value, 1))), total: 1)
-                .tint(value > 0.8 ? .red : (value > 0.4 ? .orange : .green))
+                .tint(value > 0.8 ? AppPalette.statusRed : (value > 0.4 ? AppPalette.statusOrange : AppPalette.statusGreen))
         }
         .padding(.vertical, 2)
     }
@@ -730,17 +787,17 @@ private enum StatusTint {
     static func color(named tintName: String) -> Color {
         switch tintName {
         case "orange":
-            .orange
+            AppPalette.statusOrange
         case "blue":
-            .blue
+            AppPalette.statusBlue
         case "yellow":
-            .yellow
+            AppPalette.statusYellow
         case "green":
-            .green
+            AppPalette.statusGreen
         case "red":
-            .red
+            AppPalette.statusRed
         case "slate":
-            Color(red: 0.25, green: 0.35, blue: 0.43)
+            AppPalette.slate
         default:
             .primary
         }

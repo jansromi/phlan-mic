@@ -121,6 +121,20 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.connectionCardDetail, "Control channel failed: timed out")
     }
 
+    func testStandaloneDebugCaptureShowsStoppedPrimaryStatus() {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(harness: harness, host: "10.0.0.42")
+        model.captureStatus = .capturing
+
+        XCTAssertEqual(model.primaryStatusTitle, "Stopped")
+        XCTAssertEqual(
+            model.primaryStatusDetail,
+            "Streaming is stopped. Debug capture is still running from the debug view."
+        )
+    }
+
     func testSessionHealthShowsReadyStateBeforeStreaming() {
         let harness = Harness()
         harness.currentPermissionStatus = .granted
@@ -269,7 +283,10 @@ final class AppModelTests: XCTestCase {
             port: "42100",
             transportMode: .udpRealtime
         )
-        await activateStreamingSession(model: model, harness: harness)
+        await model.connectAndStream()
+        model.microphonePermission = .granted
+        model.captureStatus = .capturing
+        model.transportStatus = .streaming
 
         harness.emitCaptureSessionEvent(
             .routeChanged(
@@ -288,6 +305,39 @@ final class AppModelTests: XCTestCase {
             model.transportDetail,
             "The session stopped because the microphone route was lost. Connect a valid input route and start again."
         )
+    }
+
+    func testCategoryChangeDoesNotStopStreamingSessionWhenInputRemainsAvailable() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await model.connectAndStream()
+        model.microphonePermission = .granted
+        model.captureStatus = .capturing
+        model.transportStatus = .streaming
+
+        harness.emitCaptureSessionEvent(
+            .routeChanged(
+                CaptureRouteChange(
+                    reason: .categoryChange,
+                    inputAvailable: true,
+                    routeSummary: "inputs[MicrophoneBuiltIn=iPhone Microphone] outputs[none]"
+                )
+            )
+        )
+
+        XCTAssertEqual(model.lastRouteChange?.reason, .categoryChange)
+        XCTAssertEqual(model.lastSystemStopReason, nil)
+        XCTAssertEqual(model.transportStatus, .streaming)
+        XCTAssertEqual(model.captureStatus, .capturing)
+        XCTAssertEqual(harness.stopCaptureCallCount, 0)
+        XCTAssertEqual(harness.transport.disconnectCallCount, 0)
     }
 
     func testSystemStopDoesNotLookLikeTransportFailure() async {
