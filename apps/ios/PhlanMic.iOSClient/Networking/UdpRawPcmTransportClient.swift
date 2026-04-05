@@ -476,7 +476,11 @@ final class UdpRawPcmTransportClient: @unchecked Sendable {
     private func fail(with detail: String) {
         stopKeepAliveTimer()
         closeConnections()
-        emitTerminalIfNeeded(.failed(detail))
+        if disconnectRequested {
+            emitTerminalIfNeeded(.stopped("Realtime transport stopped."))
+        } else {
+            emitTerminalIfNeeded(.failed(detail))
+        }
     }
 
     private func emit(_ event: AudioTransportEvent) {

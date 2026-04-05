@@ -1,5 +1,120 @@
 import Combine
 import Foundation
+import SwiftUI
+
+enum AppSceneState: String, Sendable {
+    case active
+    case inactive
+    case background
+
+    var debugLabel: String {
+        rawValue.capitalized
+    }
+}
+
+enum CaptureInterruptionState: Sendable, Equatable {
+    case notInterrupted
+    case began
+    case ended(shouldResume: Bool)
+
+    var debugLabel: String {
+        switch self {
+        case .notInterrupted:
+            "None"
+        case .began:
+            "Began"
+        case .ended(let shouldResume):
+            shouldResume ? "Ended (resume suggested)" : "Ended (manual restart)"
+        }
+    }
+}
+
+enum CaptureRouteChangeReason: String, Sendable, Equatable {
+    case unknown
+    case newDeviceAvailable
+    case oldDeviceUnavailable
+    case categoryChange
+    case override
+    case wakeFromSleep
+    case noSuitableRouteForCategory
+    case routeConfigurationChange
+
+    var debugLabel: String {
+        switch self {
+        case .unknown:
+            "Unknown"
+        case .newDeviceAvailable:
+            "New Device"
+        case .oldDeviceUnavailable:
+            "Old Device Unavailable"
+        case .categoryChange:
+            "Category Change"
+        case .override:
+            "Override"
+        case .wakeFromSleep:
+            "Wake From Sleep"
+        case .noSuitableRouteForCategory:
+            "No Suitable Route"
+        case .routeConfigurationChange:
+            "Route Reconfigured"
+        }
+    }
+
+    var shouldStopRunningCaptureWhenInputRemainsAvailable: Bool {
+        switch self {
+        case .oldDeviceUnavailable, .categoryChange, .noSuitableRouteForCategory, .routeConfigurationChange:
+            true
+        case .unknown, .newDeviceAvailable, .override, .wakeFromSleep:
+            false
+        }
+    }
+}
+
+struct CaptureRouteChange: Sendable, Equatable {
+    let reason: CaptureRouteChangeReason
+    let inputAvailable: Bool
+    let routeSummary: String
+
+    var debugLabel: String {
+        "\(reason.debugLabel) | input \(inputAvailable ? "available" : "missing") | \(routeSummary)"
+    }
+}
+
+enum CaptureSessionEvent: Sendable, Equatable {
+    case interruptionBegan
+    case interruptionEnded(shouldResume: Bool)
+    case routeChanged(CaptureRouteChange)
+    case mediaServicesWereReset
+}
+
+enum SessionStopReason: String, Sendable, Equatable {
+    case userRequested
+    case sceneBecameInactive
+    case sceneEnteredBackground
+    case audioInterrupted
+    case routeInvalidated
+    case captureFailed
+    case transportFailed
+
+    var debugLabel: String {
+        switch self {
+        case .userRequested:
+            "User Requested"
+        case .sceneBecameInactive:
+            "Scene Inactive"
+        case .sceneEnteredBackground:
+            "Scene Backgrounded"
+        case .audioInterrupted:
+            "Audio Interrupted"
+        case .routeInvalidated:
+            "Route Invalidated"
+        case .captureFailed:
+            "Capture Failed"
+        case .transportFailed:
+            "Transport Failed"
+        }
+    }
+}
 
 @MainActor
 final class AppModel: ObservableObject {
@@ -202,7 +317,8 @@ final class AppModel: ObservableObject {
             MVPAudioFormat,
             @escaping @Sendable (AudioInputLevel) -> Void,
             @escaping @Sendable (CapturedAudioFrame) -> Void,
-            @escaping @Sendable (Error) -> Void
+            @escaping @Sendable (Error) -> Void,
+            @escaping @Sendable (CaptureSessionEvent) -> Void
         ) throws -> MicrophoneCaptureStartup
         var stopCapture: () -> Void
         var makeTransportClient: (
@@ -223,12 +339,13 @@ final class AppModel: ObservableObject {
                 requestMicrophonePermission: {
                     await permissionClient.requestPermission()
                 },
-                startCapture: { format, onInputLevel, onFrame, onFailure in
+                startCapture: { format, onInputLevel, onFrame, onFailure, onSessionEvent in
                     try captureClient.startCapture(
                         format: format,
                         onInputLevel: onInputLevel,
                         onFrame: onFrame,
-                        onFailure: onFailure
+                        onFailure: onFailure,
+                        onSessionEvent: onSessionEvent
                     )
                 },
                 stopCapture: {
@@ -298,11 +415,23 @@ final class AppModel: ObservableObject {
     @Published var lastKeepAliveTime: Date?
     @Published var lastTransportError = "No transport errors."
     @Published var presentedSheet: PresentedSheet?
+    @Published var lastSceneState = AppSceneState.active
+    @Published var lastInterruptionState = CaptureInterruptionState.notInterrupted
+    @Published var lastRouteChange: CaptureRouteChange?
+    @Published var lastSystemStopReason: SessionStopReason?
+    @Published var lastSystemStopDetail = "No lifecycle stop recorded."
 
     private let dependencies: Dependencies
     private var currentTransportClient: AudioTransportClient?
     private var captureOwnedByTransport = false
     private var transportAttemptCount = 0
+    private var currentSceneState = AppSceneState.active
+    private var pendingSystemStop: PendingSystemStop?
+
+    private struct PendingSystemStop {
+        let reason: SessionStopReason
+        let detail: String
+    }
 
     init(dependencies: Dependencies = .live()) {
         self.dependencies = dependencies
@@ -347,6 +476,10 @@ final class AppModel: ObservableObject {
             return "Debug Capture Active"
         }
 
+        if shouldSurfaceLifecycleStop {
+            return "Session Paused"
+        }
+
         switch microphonePermission {
         case .unknown:
             return "Tap To Enable Mic"
@@ -387,6 +520,10 @@ final class AppModel: ObservableObject {
             return "Standalone capture is active from the debug view."
         }
 
+        if shouldSurfaceLifecycleStop {
+            return lastSystemStopDetail
+        }
+
         switch microphonePermission {
         case .unknown:
             return "The first tap will ask for microphone access."
@@ -420,6 +557,10 @@ final class AppModel: ObservableObject {
             return transportStatus.rawValue
         }
 
+        if shouldSurfaceLifecycleStop {
+            return "Paused"
+        }
+
         return setupStatus.rawValue
     }
 
@@ -447,6 +588,10 @@ final class AppModel: ObservableObject {
             }
         }
 
+        if shouldSurfaceLifecycleStop {
+            return lastSystemStopDetail
+        }
+
         return setupStatus == .ready
             ? "Ready to stream. Tap to edit the host or port."
             : hostSetupHint
@@ -459,6 +604,10 @@ final class AppModel: ObservableObject {
 
         if transportStatus.isActive {
             return transportStatus.tintName
+        }
+
+        if shouldSurfaceLifecycleStop {
+            return "orange"
         }
 
         return setupStatus.tintName
@@ -534,6 +683,10 @@ final class AppModel: ObservableObject {
             return transportDetail
         }
 
+        if shouldSurfaceLifecycleStop {
+            return lastSystemStopDetail
+        }
+
         if setupStatus == .ready {
             return "Ready to stream when you tap the microphone."
         }
@@ -583,6 +736,98 @@ final class AppModel: ObservableObject {
         }
 
         await connectAndStream()
+    }
+
+    func handleScenePhaseChange(_ scenePhase: ScenePhase) {
+        let nextSceneState: AppSceneState
+        switch scenePhase {
+        case .active:
+            nextSceneState = .active
+        case .inactive:
+            nextSceneState = .inactive
+        case .background:
+            nextSceneState = .background
+        @unknown default:
+            nextSceneState = .active
+        }
+
+        guard nextSceneState != currentSceneState else {
+            return
+        }
+
+        currentSceneState = nextSceneState
+        lastSceneState = nextSceneState
+        log("Scene state changed to \(nextSceneState.rawValue).")
+
+        switch nextSceneState {
+        case .active:
+            return
+        case .inactive:
+            stopActiveSession(
+                reason: .sceneBecameInactive,
+                detail: "The session stopped because the app became inactive. Bring the app back to the foreground and start again.",
+                logMessage: "Scene became inactive while audio was active."
+            )
+        case .background:
+            stopActiveSession(
+                reason: .sceneEnteredBackground,
+                detail: "The session stopped because the app entered the background. Reopen the app and start again.",
+                logMessage: "Scene entered the background while audio was active."
+            )
+        }
+    }
+
+    func handleCaptureSessionEvent(_ event: CaptureSessionEvent) {
+        switch event {
+        case .interruptionBegan:
+            lastInterruptionState = .began
+            log("Audio session interruption began.")
+            stopActiveSession(
+                reason: .audioInterrupted,
+                detail: "The session stopped because iOS interrupted microphone access. Start again when the interruption ends.",
+                logMessage: "Audio interruption began while audio was active."
+            )
+        case .interruptionEnded(let shouldResume):
+            lastInterruptionState = .ended(shouldResume: shouldResume)
+            let detail = shouldResume
+                ? "Audio interruption ended. iOS allows a resume, but this app requires a manual restart."
+                : "Audio interruption ended. Restart the session when you are ready."
+            log("Audio session interruption ended. shouldResume=\(shouldResume).")
+
+            if lastSystemStopReason == .audioInterrupted, pendingSystemStop == nil, !transportStatus.isActive {
+                lastSystemStopDetail = detail
+                if captureStatus == .ready {
+                    captureDetail = detail
+                }
+            }
+        case .routeChanged(let routeChange):
+            lastRouteChange = routeChange
+            log("Audio route changed: \(routeChange.debugLabel).")
+
+            guard hasActiveAudioSession else {
+                return
+            }
+
+            guard
+                !routeChange.inputAvailable ||
+                routeChange.reason.shouldStopRunningCaptureWhenInputRemainsAvailable
+            else {
+                return
+            }
+
+            stopActiveSession(
+                reason: .routeInvalidated,
+                detail: routeInvalidationDetail(for: routeChange),
+                logMessage: "Audio route change invalidated the running microphone path."
+            )
+        case .mediaServicesWereReset:
+            log("Audio media services were reset.")
+            stopActiveSession(
+                reason: .captureFailed,
+                detail: "The session stopped because iOS audio services were reset. Start again to restore capture.",
+                logMessage: "Audio media services reset while audio was active."
+            )
+        }
     }
 
     func presentHostSettings() {
@@ -651,6 +896,7 @@ final class AppModel: ObservableObject {
             return
         }
 
+        clearLifecycleStopPresentation()
         captureOwnedByTransport = false
         await startCapturePipeline(streamToTransport: false)
     }
@@ -669,6 +915,7 @@ final class AppModel: ObservableObject {
         }
 
         presentedSheet = nil
+        clearLifecycleStopPresentation()
 
         if captureStatus == .starting || captureStatus == .capturing {
             stopCapture(
@@ -718,6 +965,7 @@ final class AppModel: ObservableObject {
             return
         }
 
+        clearLifecycleStopPresentation()
         transportStatus = .stopping
         transportDetail = stoppingTransportDetail
         log("Stopping the \(hostConfiguration.transportMode.label) session.")
@@ -779,6 +1027,10 @@ final class AppModel: ObservableObject {
         case .error:
             return "Error"
         case .disconnected:
+            if shouldSurfaceLifecycleStop {
+                return "Paused"
+            }
+
             return setupStatus == .ready ? "Ready" : "Setup"
         }
     }
@@ -786,6 +1038,10 @@ final class AppModel: ObservableObject {
     private var sessionHealthConnectionTintName: String {
         if transportStatus != .disconnected {
             return transportStatus.tintName
+        }
+
+        if shouldSurfaceLifecycleStop {
+            return "orange"
         }
 
         return setupStatus.tintName
@@ -808,6 +1064,10 @@ final class AppModel: ObservableObject {
         case .error:
             return lastTransportError
         case .disconnected:
+            if shouldSurfaceLifecycleStop {
+                return lastSystemStopDetail
+            }
+
             return setupStatus == .ready
                 ? "The host configuration is ready and the session is idle."
                 : hostSetupHint
@@ -1019,6 +1279,11 @@ final class AppModel: ObservableObject {
                     Task { @MainActor in
                         model.handleCaptureFailure(error)
                     }
+                },
+                { event in
+                    Task { @MainActor in
+                        model.handleCaptureSessionEvent(event)
+                    }
                 }
             )
 
@@ -1071,6 +1336,14 @@ final class AppModel: ObservableObject {
     }
 
     private func handleCaptureFailure(_ error: Error) {
+        guard captureStatus == .starting || captureStatus == .capturing || captureOwnedByTransport else {
+            return
+        }
+
+        guard pendingSystemStop == nil else {
+            return
+        }
+
         latestInputLevel = .silence
         captureStatus = .error
         captureDetail = error.localizedDescription
@@ -1134,6 +1407,11 @@ final class AppModel: ObservableObject {
         case .failed(let detail):
             handleTransportFailure(detail: detail, logMessage: "\(hostConfiguration.transportMode.label) transport failed: \(detail)")
         case .stopped(let detail):
+            if pendingSystemStop != nil {
+                completePendingSystemStop()
+                return
+            }
+
             currentTransportClient = nil
             captureOwnedByTransport = false
             if transportStatus == .stopping {
@@ -1195,6 +1473,11 @@ final class AppModel: ObservableObject {
     }
 
     private func handleTransportFailure(detail: String, logMessage: String) {
+        if pendingSystemStop != nil {
+            completePendingSystemStop()
+            return
+        }
+
         if captureStatus == .starting || captureStatus == .capturing {
             dependencies.stopCapture()
             latestInputLevel = .silence
@@ -1226,6 +1509,72 @@ final class AppModel: ObservableObject {
         if let logMessage {
             log(logMessage)
         }
+    }
+
+    private func stopActiveSession(reason: SessionStopReason, detail: String, logMessage: String) {
+        guard hasActiveAudioSession else {
+            return
+        }
+
+        guard pendingSystemStop == nil else {
+            return
+        }
+
+        pendingSystemStop = PendingSystemStop(reason: reason, detail: detail)
+        lastSystemStopReason = reason
+        lastSystemStopDetail = detail
+        log(logMessage)
+
+        if captureStatus == .starting || captureStatus == .capturing {
+            dependencies.stopCapture()
+            latestInputLevel = .silence
+            captureSessionSummary = "Capture stopped."
+            captureOwnedByTransport = false
+            syncCaptureAvailability(reason: detail)
+        }
+
+        if transportStatus.isActive {
+            transportStatus = .stopping
+            transportDetail = detail
+            currentTransportClient?.disconnect()
+        } else {
+            completePendingSystemStop()
+        }
+    }
+
+    private func completePendingSystemStop() {
+        guard let pendingSystemStop else {
+            return
+        }
+
+        self.pendingSystemStop = nil
+        currentTransportClient = nil
+        captureOwnedByTransport = false
+        transportStatus = .disconnected
+        transportDetail = pendingSystemStop.detail
+        lastTransportError = "No transport errors."
+    }
+
+    private func clearLifecycleStopPresentation() {
+        pendingSystemStop = nil
+        lastSystemStopReason = nil
+        lastSystemStopDetail = "No lifecycle stop recorded."
+    }
+
+    private var shouldSurfaceLifecycleStop: Bool {
+        lastSystemStopReason != nil && !transportStatus.isActive && transportStatus != .error
+    }
+
+    private var hasActiveAudioSession: Bool {
+        transportStatus.isActive || captureStatus == .starting || captureStatus == .capturing
+    }
+
+    private func routeInvalidationDetail(for routeChange: CaptureRouteChange) -> String {
+        if !routeChange.inputAvailable {
+            return "The session stopped because the microphone route was lost. Connect a valid input route and start again."
+        }
+
+        return "The session stopped because the audio route changed (\(routeChange.reason.debugLabel.lowercased())). Start again on the new route."
     }
 
     private func syncCaptureAvailability(reason: String? = nil) {

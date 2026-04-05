@@ -98,12 +98,15 @@ final class MicrophoneCaptureClient {
     private var onInputLevel: (@Sendable (AudioInputLevel) -> Void)?
     private var onFrame: (@Sendable (CapturedAudioFrame) -> Void)?
     private var onFailure: (@Sendable (Error) -> Void)?
+    private var onSessionEvent: (@Sendable (CaptureSessionEvent) -> Void)?
+    private var notificationObservers: [NSObjectProtocol] = []
 
     func startCapture(
         format: MVPAudioFormat = .defaultVoice,
         onInputLevel: @escaping @Sendable (AudioInputLevel) -> Void,
         onFrame: @escaping @Sendable (CapturedAudioFrame) -> Void,
-        onFailure: @escaping @Sendable (Error) -> Void
+        onFailure: @escaping @Sendable (Error) -> Void,
+        onSessionEvent: @escaping @Sendable (CaptureSessionEvent) -> Void
     ) throws -> MicrophoneCaptureStartup {
         #if targetEnvironment(simulator)
         throw MicrophoneCaptureError.simulatorUnavailable
@@ -147,6 +150,8 @@ final class MicrophoneCaptureClient {
         self.onInputLevel = onInputLevel
         self.onFrame = onFrame
         self.onFailure = onFailure
+        self.onSessionEvent = onSessionEvent
+        registerSessionObservers()
 
         inputNode.installTap(
             onBus: 0,
@@ -196,6 +201,8 @@ final class MicrophoneCaptureClient {
     }
 
     private func teardownCaptureState() {
+        removeSessionObservers()
+
         if let engine {
             engine.inputNode.removeTap(onBus: 0)
             engine.stop()
@@ -208,6 +215,7 @@ final class MicrophoneCaptureClient {
         onInputLevel = nil
         onFrame = nil
         onFailure = nil
+        onSessionEvent = nil
         try? session.setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -328,12 +336,126 @@ final class MicrophoneCaptureClient {
         return AudioInputLevel(averageLevel: averageLevel, peakLevel: peakLevel)
     }
 
+    private func registerSessionObservers() {
+        removeSessionObservers()
+
+        let center = NotificationCenter.default
+        notificationObservers = [
+            center.addObserver(
+                forName: AVAudioSession.interruptionNotification,
+                object: session,
+                queue: nil
+            ) { [weak self] notification in
+                self?.handleInterruptionNotification(notification)
+            },
+            center.addObserver(
+                forName: AVAudioSession.routeChangeNotification,
+                object: session,
+                queue: nil
+            ) { [weak self] notification in
+                self?.handleRouteChangeNotification(notification)
+            },
+            center.addObserver(
+                forName: AVAudioSession.mediaServicesWereResetNotification,
+                object: nil,
+                queue: nil
+            ) { [weak self] _ in
+                self?.emitSessionEventIfCapturing(.mediaServicesWereReset)
+            }
+        ]
+    }
+
+    private func removeSessionObservers() {
+        let center = NotificationCenter.default
+        for observer in notificationObservers {
+            center.removeObserver(observer)
+        }
+        notificationObservers.removeAll(keepingCapacity: false)
+    }
+
+    private func handleInterruptionNotification(_ notification: Notification) {
+        guard
+            let rawValue = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+            let interruptionType = AVAudioSession.InterruptionType(rawValue: rawValue)
+        else {
+            return
+        }
+
+        switch interruptionType {
+        case .began:
+            emitSessionEventIfCapturing(.interruptionBegan)
+        case .ended:
+            let optionsRawValue = notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsRawValue)
+            emitSessionEventIfCapturing(.interruptionEnded(shouldResume: options.contains(.shouldResume)))
+        @unknown default:
+            return
+        }
+    }
+
+    private func handleRouteChangeNotification(_ notification: Notification) {
+        let routeChangeReason: CaptureRouteChangeReason
+        if
+            let rawValue = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+            let sessionReason = AVAudioSession.RouteChangeReason(rawValue: rawValue)
+        {
+            routeChangeReason = Self.routeChangeReason(from: sessionReason)
+        } else {
+            routeChangeReason = .unknown
+        }
+
+        emitSessionEventIfCapturing(
+            .routeChanged(
+                CaptureRouteChange(
+                    reason: routeChangeReason,
+                    inputAvailable: session.isInputAvailable,
+                    routeSummary: Self.routeSummary(for: session.currentRoute)
+                )
+            )
+        )
+    }
+
+    private func emitSessionEventIfCapturing(_ event: CaptureSessionEvent) {
+        lock.lock()
+        guard engine != nil else {
+            lock.unlock()
+            return
+        }
+
+        let callback = onSessionEvent
+        lock.unlock()
+        callback?(event)
+    }
+
     private static func routeSummary(for route: AVAudioSessionRouteDescription) -> String {
         let inputs = route.inputs.map { "\($0.portType.rawValue)=\($0.portName)" }
         let outputs = route.outputs.map { "\($0.portType.rawValue)=\($0.portName)" }
         let inputSummary = inputs.isEmpty ? "none" : inputs.joined(separator: ", ")
         let outputSummary = outputs.isEmpty ? "none" : outputs.joined(separator: ", ")
         return "inputs[\(inputSummary)] outputs[\(outputSummary)]"
+    }
+
+    private static func routeChangeReason(from reason: AVAudioSession.RouteChangeReason) -> CaptureRouteChangeReason {
+        switch reason {
+        case .newDeviceAvailable:
+            .newDeviceAvailable
+        case .oldDeviceUnavailable:
+            .oldDeviceUnavailable
+        case .categoryChange:
+            .categoryChange
+        case .override:
+            .override
+        case .wakeFromSleep:
+            .wakeFromSleep
+        case .noSuitableRouteForCategory:
+            .noSuitableRouteForCategory
+        case .routeConfigurationChange:
+            .routeConfigurationChange
+        case .unknown:
+            .unknown
+        @unknown default:
+            .unknown
+        }
     }
 }
 

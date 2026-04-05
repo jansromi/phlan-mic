@@ -572,6 +572,17 @@ private struct DebugView: View {
                 KeyValueRow(label: "Last Error", value: model.lastTransportError)
             }
 
+            Section("Lifecycle") {
+                KeyValueRow(label: "Scene", value: model.lastSceneState.debugLabel)
+                KeyValueRow(label: "Interruption", value: model.lastInterruptionState.debugLabel)
+                KeyValueRow(label: "Route Change", value: model.lastRouteChange?.debugLabel ?? "None")
+                KeyValueRow(label: "System Stop", value: model.lastSystemStopReason?.debugLabel ?? "None")
+
+                Text(model.lastSystemStopDetail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
             Section("Input Meter") {
                 MeterRow(
                     label: "Average",

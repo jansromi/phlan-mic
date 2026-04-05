@@ -156,6 +156,207 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.sessionHealthFootnote, "Streaming to 10.0.0.42:42100.")
     }
 
+    func testSceneBecomingInactiveStopsStreamingSession() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        model.handleScenePhaseChange(.inactive)
+
+        XCTAssertEqual(model.lastSystemStopReason, .sceneBecameInactive)
+        XCTAssertEqual(model.transportStatus, .stopping)
+        XCTAssertEqual(harness.stopCaptureCallCount, 1)
+        XCTAssertEqual(harness.transport.disconnectCallCount, 1)
+
+        harness.transport.emit(.stopped("Realtime transport stopped."))
+
+        XCTAssertEqual(model.transportStatus, .disconnected)
+        XCTAssertEqual(model.connectionCardStatusLabel, "Paused")
+        XCTAssertEqual(model.lastTransportError, "No transport errors.")
+        XCTAssertEqual(
+            model.transportDetail,
+            "The session stopped because the app became inactive. Bring the app back to the foreground and start again."
+        )
+    }
+
+    func testSceneEnteringBackgroundStopsStreamingSession() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        model.handleScenePhaseChange(.background)
+        harness.transport.emit(.stopped("Realtime transport stopped."))
+
+        XCTAssertEqual(model.lastSystemStopReason, .sceneEnteredBackground)
+        XCTAssertEqual(model.transportStatus, .disconnected)
+        XCTAssertEqual(
+            model.transportDetail,
+            "The session stopped because the app entered the background. Reopen the app and start again."
+        )
+    }
+
+    func testInterruptionBeginStopsStreamingSession() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        harness.emitCaptureSessionEvent(.interruptionBegan)
+        harness.transport.emit(.stopped("Realtime transport stopped."))
+
+        XCTAssertEqual(model.lastSystemStopReason, .audioInterrupted)
+        XCTAssertEqual(model.lastInterruptionState, .began)
+        XCTAssertEqual(model.transportStatus, .disconnected)
+        XCTAssertEqual(
+            model.transportDetail,
+            "The session stopped because iOS interrupted microphone access. Start again when the interruption ends."
+        )
+    }
+
+    func testInterruptionEndLeavesAppReadyButDoesNotAutoResume() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        harness.emitCaptureSessionEvent(.interruptionBegan)
+        harness.transport.emit(.stopped("Realtime transport stopped."))
+        harness.emitCaptureSessionEvent(.interruptionEnded(shouldResume: true))
+
+        XCTAssertEqual(model.lastInterruptionState, .ended(shouldResume: true))
+        XCTAssertEqual(model.transportStatus, .disconnected)
+        XCTAssertEqual(model.captureStatus, .ready)
+        XCTAssertEqual(harness.transport.connectCalls.count, 1)
+        XCTAssertEqual(
+            model.lastSystemStopDetail,
+            "Audio interruption ended. iOS allows a resume, but this app requires a manual restart."
+        )
+    }
+
+    func testRouteInvalidationStopsStreamingSession() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        harness.emitCaptureSessionEvent(
+            .routeChanged(
+                CaptureRouteChange(
+                    reason: .oldDeviceUnavailable,
+                    inputAvailable: false,
+                    routeSummary: "inputs[none] outputs[builtInSpeaker=Speaker]"
+                )
+            )
+        )
+        harness.transport.emit(.stopped("Realtime transport stopped."))
+
+        XCTAssertEqual(model.lastSystemStopReason, .routeInvalidated)
+        XCTAssertEqual(model.transportStatus, .disconnected)
+        XCTAssertEqual(
+            model.transportDetail,
+            "The session stopped because the microphone route was lost. Connect a valid input route and start again."
+        )
+    }
+
+    func testSystemStopDoesNotLookLikeTransportFailure() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        model.handleScenePhaseChange(.inactive)
+        harness.transport.emit(.stopped("Realtime transport stopped."))
+
+        XCTAssertEqual(model.transportStatus, .disconnected)
+        XCTAssertNotEqual(model.transportStatus, .error)
+        XCTAssertEqual(model.lastTransportError, "No transport errors.")
+        XCTAssertEqual(model.connectionCardStatusLabel, "Paused")
+    }
+
+    func testLifecycleStopWhileAlreadyStoppingIsIdempotent() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        model.handleScenePhaseChange(.inactive)
+        model.handleScenePhaseChange(.background)
+        harness.emitCaptureSessionEvent(.interruptionBegan)
+
+        XCTAssertEqual(model.lastSystemStopReason, .sceneBecameInactive)
+        XCTAssertEqual(harness.stopCaptureCallCount, 1)
+        XCTAssertEqual(harness.transport.disconnectCallCount, 1)
+    }
+
+    func testTransportFailureAfterLifecycleStopDoesNotCorruptState() async {
+        let harness = Harness()
+        harness.currentPermissionStatus = .granted
+
+        let model = makeModel(
+            harness: harness,
+            host: "10.0.0.42",
+            port: "42100",
+            transportMode: .udpRealtime
+        )
+        await activateStreamingSession(model: model, harness: harness)
+
+        model.handleScenePhaseChange(.inactive)
+        harness.transport.emit(.failed("Control channel failed: timed out"))
+
+        XCTAssertEqual(model.lastSystemStopReason, .sceneBecameInactive)
+        XCTAssertEqual(model.transportStatus, .disconnected)
+        XCTAssertEqual(model.lastTransportError, "No transport errors.")
+        XCTAssertEqual(model.connectionCardStatusLabel, "Paused")
+        XCTAssertEqual(
+            model.transportDetail,
+            "The session stopped because the app became inactive. Bring the app back to the foreground and start again."
+        )
+    }
+
     private func makeModel(
         harness: Harness,
         host: String = "",
@@ -168,13 +369,23 @@ final class AppModelTests: XCTestCase {
         model.updateTransportMode(transportMode)
         return model
     }
+
+    private func activateStreamingSession(model: AppModel, harness: Harness) async {
+        await model.connectAndStream()
+        harness.transport.emit(.stateChanged(.readyForAudio, detail: "UDP audio stream accepted. Starting microphone capture."))
+        model.transportStatus = .streaming
+        model.transportDetail = "Streaming realtime raw PCM to the Windows host."
+        XCTAssertEqual(model.captureStatus, .capturing)
+    }
 }
 
 private final class Harness {
     var currentPermissionStatus: MicrophonePermissionState = .unknown
     var requestPermissionStatus: MicrophonePermissionState = .granted
     var requestPermissionCallCount = 0
+    var stopCaptureCallCount = 0
     var createdTransportModes: [HostConfiguration.TransportMode] = []
+    var captureSessionEventHandler: (@Sendable (CaptureSessionEvent) -> Void)?
     let transport = MockTransportClient()
 
     var dependencies: AppModel.Dependencies {
@@ -187,16 +398,22 @@ private final class Harness {
                 currentPermissionStatus = requestPermissionStatus
                 return requestPermissionStatus
             },
-            startCapture: { _, _, _, _ in
-                MicrophoneCaptureStartup(
+            startCapture: { [unowned self] _, _, _, _, onSessionEvent in
+                captureSessionEventHandler = onSessionEvent
+                return MicrophoneCaptureStartup(
                     requestedFormat: .defaultVoice,
                     inputFormatSummary: "input",
                     outputFormatSummary: "output",
                     actualSampleRate: Double(MVPAudioFormat.defaultVoice.sampleRate),
-                    actualBufferDuration: TimeInterval(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) / 1_000
+                    actualBufferDuration: TimeInterval(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) / 1_000,
+                    sessionCategory: "record",
+                    sessionMode: "measurement",
+                    routeSummary: "inputs[builtInMic=Built-In Microphone] outputs[none]"
                 )
             },
-            stopCapture: {},
+            stopCapture: { [unowned self] in
+                stopCaptureCallCount += 1
+            },
             makeTransportClient: { [unowned self] transportMode, handler in
                 createdTransportModes.append(transportMode)
                 transport.eventHandler = handler
@@ -204,6 +421,10 @@ private final class Harness {
             },
             log: { _ in }
         )
+    }
+
+    func emitCaptureSessionEvent(_ event: CaptureSessionEvent) {
+        captureSessionEventHandler?(event)
     }
 }
 
