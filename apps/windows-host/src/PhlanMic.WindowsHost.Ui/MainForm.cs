@@ -33,6 +33,11 @@ internal sealed class MainForm : Form
         this.configPath = configPath ?? throw new ArgumentNullException(nameof(configPath));
 
         Text = "PhlanMic Windows Host";
+        var applicationIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        if (applicationIcon is not null)
+        {
+            Icon = applicationIcon;
+        }
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(960, 760);
         Size = new Size(1040, 820);

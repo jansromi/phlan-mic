@@ -25,6 +25,13 @@ dotnet run --project src/PhlanMic.WindowsHost
 dotnet run --project src/PhlanMic.WindowsHost.Ui
 ```
 
+App icon sources live under `assets/app-icons/`. After replacing the source images, regenerate the checked-in outputs with:
+
+```sh
+./scripts/generate-ios-app-icons.sh
+python3 ./scripts/generate-windows-app-icon.py
+```
+
 The console host and desktop host now share the same runtime layer. The console app remains the best path for SSH/smoke-test flows, while the UI shows:
 
 - host readiness and fault state

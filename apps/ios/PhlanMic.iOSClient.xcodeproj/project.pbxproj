@@ -23,6 +23,7 @@
 		A00000010000000000000014 /* TransportProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000016 /* TransportProtocol.swift */; };
 		A00000010000000000000015 /* UdpRawPcmTransportClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000017 /* UdpRawPcmTransportClient.swift */; };
 		A00000010000000000000016 /* TransportProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000018 /* TransportProtocolTests.swift */; };
+		A00000010000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000019 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +55,7 @@
 		A00000110000000000000016 /* TransportProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProtocol.swift; sourceTree = "<group>"; };
 		A00000110000000000000017 /* UdpRawPcmTransportClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UdpRawPcmTransportClient.swift; sourceTree = "<group>"; };
 		A00000110000000000000018 /* TransportProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProtocolTests.swift; sourceTree = "<group>"; };
+		A00000110000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +91,7 @@
 			children = (
 				A00000310000000000000004 /* App */,
 				A00000310000000000000005 /* Audio */,
+				A00000110000000000000019 /* Assets.xcassets */,
 				A00000310000000000000006 /* Diagnostics */,
 				A00000310000000000000007 /* Networking */,
 				A00000310000000000000008 /* Permissions */,
@@ -243,6 +246,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A00000010000000000000017 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -350,6 +354,7 @@
 		A00000910000000000000003 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -383,6 +388,7 @@
 		A00000910000000000000004 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
