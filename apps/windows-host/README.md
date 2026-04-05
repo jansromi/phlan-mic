@@ -38,6 +38,7 @@ The console host and desktop host now share the same runtime layer. The console 
 - local IP / manual connect details
 - selected output target and VB-CABLE pairing state
 - live session / stream counters
+- a live audio activity meter with peak / RMS state
 - troubleshooting diagnostics without parsing structured logs
 
 When you launch `PhlanMic.WindowsHost.Ui` from `powershell.exe` or `cmd.exe`, the desktop window still opens and structured logs are also written back to that terminal session.

@@ -8,6 +8,7 @@ internal sealed class DebugPipelineDrain
     private static readonly TimeSpan EmptyPollDelay = TimeSpan.FromMilliseconds(5);
     private readonly AudioStreamPipeline pipeline;
     private readonly object gate = new();
+    private readonly Pcm16AudioLevelMeter signalMeter = new();
     private long drainedFrames;
     private long drainedBytes;
     private long? lastSequenceNumber;
@@ -23,6 +24,7 @@ internal sealed class DebugPipelineDrain
     {
         lock (gate)
         {
+            var observedAtUtc = DateTimeOffset.UtcNow;
             return new AudioOutputSnapshot(
                 SinkKind: "DebugDrain",
                 DeviceId: null,
@@ -45,7 +47,8 @@ internal sealed class DebugPipelineDrain
                 StartedAtUtc: null,
                 LastFrameCapturedAtUtc: lastFrameCapturedAtUtc,
                 LastSubmittedAtUtc: lastDrainedAtUtc,
-                LastCompletedAtUtc: lastDrainedAtUtc);
+                LastCompletedAtUtc: lastDrainedAtUtc,
+                SignalMeter: signalMeter.GetSnapshot(observedAtUtc));
         }
     }
 
@@ -78,11 +81,13 @@ internal sealed class DebugPipelineDrain
     {
         lock (gate)
         {
+            var observedAtUtc = DateTimeOffset.UtcNow;
             drainedFrames++;
             drainedBytes += frame.Payload.Length;
             lastSequenceNumber = frame.SequenceNumber;
             lastFrameCapturedAtUtc = frame.CapturedAtUtc;
-            lastDrainedAtUtc = DateTimeOffset.UtcNow;
+            lastDrainedAtUtc = observedAtUtc;
+            signalMeter.ObserveFrame(frame.Format, frame.Payload, observedAtUtc);
         }
     }
 

@@ -12,6 +12,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
     private readonly OutputConfig config;
     private readonly VbCableEndpointPair selectedPair;
     private readonly object gate = new();
+    private readonly Pcm16AudioLevelMeter signalMeter = new();
     private CoreAudioInterop.IAudioClient? audioClient;
     private CoreAudioInterop.IAudioRenderClient? renderClient;
     private PreparedOutputFrame? currentFrame;
@@ -81,6 +82,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
 
         lock (gate)
         {
+            var observedAtUtc = DateTimeOffset.UtcNow;
             var outstandingBytes = (long)paddingFrames * bytesPerDeviceFrame;
             var bufferedDeviceFrames = outputFormat.BytesPerFrame > 0
                 ? (int)Math.Ceiling(outstandingBytes / (double)outputFormat.BytesPerFrame)
@@ -113,7 +115,8 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
                 StartedAtUtc: startedAtUtc,
                 LastFrameCapturedAtUtc: lastFrameCapturedAtUtc,
                 LastSubmittedAtUtc: lastSubmittedAtUtc,
-                LastCompletedAtUtc: lastCompletedAtUtc);
+                LastCompletedAtUtc: lastCompletedAtUtc,
+                SignalMeter: signalMeter.GetSnapshot(observedAtUtc));
         }
     }
 
@@ -374,6 +377,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
                     {
                         lastSequenceNumber = currentFrame.SequenceNumber;
                         lastFrameCapturedAtUtc = currentFrame.CapturedAtUtc;
+                        signalMeter.ObserveFrame(outputFormat, currentFrame.Payload, DateTimeOffset.UtcNow);
                     }
 
                     lastSubmittedAtUtc = DateTimeOffset.UtcNow;

@@ -1,3 +1,5 @@
+using PhlanMic.Host.Core;
+
 namespace PhlanMic.WindowsHost;
 
 public sealed record AudioOutputSnapshot(
@@ -22,7 +24,8 @@ public sealed record AudioOutputSnapshot(
     DateTimeOffset? StartedAtUtc,
     DateTimeOffset? LastFrameCapturedAtUtc,
     DateTimeOffset? LastSubmittedAtUtc,
-    DateTimeOffset? LastCompletedAtUtc)
+    DateTimeOffset? LastCompletedAtUtc,
+    AudioLevelMeterSnapshot SignalMeter)
 {
     public static AudioOutputSnapshot Empty(string sinkKind) => new(
         sinkKind,
@@ -46,5 +49,6 @@ public sealed record AudioOutputSnapshot(
         null,
         null,
         null,
-        null);
+        null,
+        AudioLevelMeterSnapshot.Empty);
 }

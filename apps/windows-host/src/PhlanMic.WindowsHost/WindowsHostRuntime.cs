@@ -4,6 +4,7 @@ namespace PhlanMic.WindowsHost;
 
 public sealed class WindowsHostRuntime : IAsyncDisposable
 {
+    private static readonly TimeSpan SnapshotPublishInterval = TimeSpan.FromMilliseconds(250);
     private static readonly TimeSpan StatsLogInterval = TimeSpan.FromSeconds(5);
     private readonly object syncRoot = new();
     private readonly StructuredConsoleLogger logger;
@@ -455,72 +456,78 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
         IAudioOutputSink outputSink,
         CancellationToken cancellationToken)
     {
-        using var timer = new PeriodicTimer(StatsLogInterval);
+        using var timer = new PeriodicTimer(SnapshotPublishInterval);
         long lastDroppedFrames = 0;
         long lastRejectedFrames = 0;
         long lastUnderrunCount = 0;
+        var nextStatsLogAtUtc = DateTimeOffset.UtcNow;
 
         try
         {
             while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
+                var observedAtUtc = DateTimeOffset.UtcNow;
                 var stats = inputSource.GetStatisticsSnapshot();
                 var outputSnapshot = outputSink.GetSnapshot();
                 var robustness = stats.Robustness;
-                logger.Info("stream_stats", "Stream statistics updated.", new Dictionary<string, object?>
+                if (observedAtUtc >= nextStatsLogAtUtc)
                 {
-                    ["bytesReceived"] = stats.BytesReceived,
-                    ["packetsReceived"] = stats.PacketsReceived,
-                    ["framesReceived"] = stats.FramesReceived,
-                    ["acceptedFrames"] = stats.AcceptedFrames,
-                    ["rejectedFrames"] = stats.RejectedFrames,
-                    ["droppedFrames"] = stats.DroppedFrames,
-                    ["controlMessagesReceived"] = stats.Transport.ControlMessagesReceived,
-                    ["controlMessagesSent"] = stats.Transport.ControlMessagesSent,
-                    ["controlTimeoutCount"] = stats.Transport.ControlTimeoutCount,
-                    ["protocolErrorCount"] = stats.Transport.ProtocolErrorCount,
-                    ["audioPacketsRejected"] = stats.Transport.AudioPacketsRejected,
-                    ["duplicatePackets"] = stats.Transport.DuplicatePackets,
-                    ["outOfOrderPackets"] = stats.Transport.OutOfOrderPackets,
-                    ["decodeFailureCount"] = stats.Transport.DecodeFailureCount,
-                    ["bufferedFrames"] = stats.BufferedFrameCount,
-                    ["streamRobustnessState"] = robustness.State.ToString(),
-                    ["expectedNextSequence"] = robustness.ExpectedNextSequence,
-                    ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
-                    ["sequenceGapsObserved"] = robustness.SequenceGapsObserved,
-                    ["lateFramesArrived"] = robustness.LateFramesArrived,
-                    ["lateFramesDropped"] = robustness.LateFramesDropped,
-                    ["missingFramesDetected"] = robustness.MissingFramesDetected,
-                    ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted,
-                    ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
-                    ["largestObservedGap"] = robustness.LargestObservedGap,
-                    ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
-                    ["targetBufferedFrames"] = robustness.TargetBufferedFrames,
-                    ["maxLateFrameToleranceFrames"] = robustness.MaxLateFrameToleranceFrames,
-                    ["missingFrameGraceMs"] = robustness.MissingFrameGraceMs,
-                    ["hostEstimatedBufferLatencyMs"] = robustness.EstimatedBufferLatencyMs,
-                    ["lastActivityUtc"] = stats.LastActivityUtc,
-                    ["outputSink"] = outputSnapshot.SinkKind,
-                    ["outputDeviceId"] = outputSnapshot.DeviceId,
-                    ["outputDeviceName"] = outputSnapshot.DeviceName,
-                    ["outputEndpointId"] = outputSnapshot.EndpointId,
-                    ["outputCaptureEndpointId"] = outputSnapshot.PairedCaptureEndpointId,
-                    ["outputCaptureEndpointName"] = outputSnapshot.PairedCaptureEndpointName,
-                    ["outputFormat"] = outputSnapshot.OutputFormat,
-                    ["outputBufferCount"] = outputSnapshot.BufferCount,
-                    ["outputBufferedFrames"] = outputSnapshot.BufferedFrames,
-                    ["outputSubmittedFrames"] = outputSnapshot.SubmittedFrames,
-                    ["outputCompletedFrames"] = outputSnapshot.CompletedFrames,
-                    ["outputCompletedBytes"] = outputSnapshot.CompletedBytes,
-                    ["silenceFramesInserted"] = outputSnapshot.SilenceFramesInserted,
-                    ["underrunCount"] = outputSnapshot.UnderrunCount,
-                    ["estimatedLatencyMs"] = outputSnapshot.EstimatedLatencyMs,
-                    ["glitchRatePerMinute"] = outputSnapshot.GlitchRatePerMinute,
-                    ["lastOutputSequenceNumber"] = outputSnapshot.LastSequenceNumber,
-                    ["lastFrameCapturedAtUtc"] = outputSnapshot.LastFrameCapturedAtUtc,
-                    ["lastFrameSubmittedAtUtc"] = outputSnapshot.LastSubmittedAtUtc,
-                    ["lastFrameCompletedAtUtc"] = outputSnapshot.LastCompletedAtUtc
-                });
+                    logger.Info("stream_stats", "Stream statistics updated.", new Dictionary<string, object?>
+                    {
+                        ["bytesReceived"] = stats.BytesReceived,
+                        ["packetsReceived"] = stats.PacketsReceived,
+                        ["framesReceived"] = stats.FramesReceived,
+                        ["acceptedFrames"] = stats.AcceptedFrames,
+                        ["rejectedFrames"] = stats.RejectedFrames,
+                        ["droppedFrames"] = stats.DroppedFrames,
+                        ["controlMessagesReceived"] = stats.Transport.ControlMessagesReceived,
+                        ["controlMessagesSent"] = stats.Transport.ControlMessagesSent,
+                        ["controlTimeoutCount"] = stats.Transport.ControlTimeoutCount,
+                        ["protocolErrorCount"] = stats.Transport.ProtocolErrorCount,
+                        ["audioPacketsRejected"] = stats.Transport.AudioPacketsRejected,
+                        ["duplicatePackets"] = stats.Transport.DuplicatePackets,
+                        ["outOfOrderPackets"] = stats.Transport.OutOfOrderPackets,
+                        ["decodeFailureCount"] = stats.Transport.DecodeFailureCount,
+                        ["bufferedFrames"] = stats.BufferedFrameCount,
+                        ["streamRobustnessState"] = robustness.State.ToString(),
+                        ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                        ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["sequenceGapsObserved"] = robustness.SequenceGapsObserved,
+                        ["lateFramesArrived"] = robustness.LateFramesArrived,
+                        ["lateFramesDropped"] = robustness.LateFramesDropped,
+                        ["missingFramesDetected"] = robustness.MissingFramesDetected,
+                        ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted,
+                        ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
+                        ["largestObservedGap"] = robustness.LargestObservedGap,
+                        ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
+                        ["targetBufferedFrames"] = robustness.TargetBufferedFrames,
+                        ["maxLateFrameToleranceFrames"] = robustness.MaxLateFrameToleranceFrames,
+                        ["missingFrameGraceMs"] = robustness.MissingFrameGraceMs,
+                        ["hostEstimatedBufferLatencyMs"] = robustness.EstimatedBufferLatencyMs,
+                        ["lastActivityUtc"] = stats.LastActivityUtc,
+                        ["outputSink"] = outputSnapshot.SinkKind,
+                        ["outputDeviceId"] = outputSnapshot.DeviceId,
+                        ["outputDeviceName"] = outputSnapshot.DeviceName,
+                        ["outputEndpointId"] = outputSnapshot.EndpointId,
+                        ["outputCaptureEndpointId"] = outputSnapshot.PairedCaptureEndpointId,
+                        ["outputCaptureEndpointName"] = outputSnapshot.PairedCaptureEndpointName,
+                        ["outputFormat"] = outputSnapshot.OutputFormat,
+                        ["outputBufferCount"] = outputSnapshot.BufferCount,
+                        ["outputBufferedFrames"] = outputSnapshot.BufferedFrames,
+                        ["outputSubmittedFrames"] = outputSnapshot.SubmittedFrames,
+                        ["outputCompletedFrames"] = outputSnapshot.CompletedFrames,
+                        ["outputCompletedBytes"] = outputSnapshot.CompletedBytes,
+                        ["silenceFramesInserted"] = outputSnapshot.SilenceFramesInserted,
+                        ["underrunCount"] = outputSnapshot.UnderrunCount,
+                        ["estimatedLatencyMs"] = outputSnapshot.EstimatedLatencyMs,
+                        ["glitchRatePerMinute"] = outputSnapshot.GlitchRatePerMinute,
+                        ["lastOutputSequenceNumber"] = outputSnapshot.LastSequenceNumber,
+                        ["lastFrameCapturedAtUtc"] = outputSnapshot.LastFrameCapturedAtUtc,
+                        ["lastFrameSubmittedAtUtc"] = outputSnapshot.LastSubmittedAtUtc,
+                        ["lastFrameCompletedAtUtc"] = outputSnapshot.LastCompletedAtUtc
+                    });
+                    nextStatsLogAtUtc = observedAtUtc + StatsLogInterval;
+                }
 
                 PublishSnapshot(MapRuntimeSnapshot(inputSource.GetSessionSnapshot(), stats, outputSnapshot, fault: snapshot.Fault));
 

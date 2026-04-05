@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Text;
 using System.Windows.Forms;
+using PhlanMic.Host.Core;
 
 namespace PhlanMic.WindowsHost.Ui;
 
@@ -21,6 +22,8 @@ internal sealed class MainForm : Form
     private readonly TextBox outputTextBox;
     private readonly TextBox sessionTextBox;
     private readonly TextBox diagnosticsTextBox;
+    private readonly AudioLevelMeterControl signalMeterControl;
+    private readonly Label signalStatusLabel;
     private readonly System.Windows.Forms.Timer snapshotRefreshTimer;
     private WindowsHostRuntimeSnapshot? lastAppliedSnapshot;
     private WindowsHostRuntimeSnapshot? pendingSnapshot;
@@ -52,6 +55,12 @@ internal sealed class MainForm : Form
         outputTextBox = CreateMultilineTextBox();
         sessionTextBox = CreateMultilineTextBox();
         diagnosticsTextBox = CreateMultilineTextBox();
+        signalMeterControl = new AudioLevelMeterControl
+        {
+            Dock = DockStyle.Top,
+            Margin = new Padding(0, 0, 0, 8)
+        };
+        signalStatusLabel = CreateValueLabel(new Font("Cascadia Mono", 9f, FontStyle.Regular));
         snapshotRefreshTimer = new System.Windows.Forms.Timer
         {
             Interval = (int)SnapshotRefreshInterval.TotalMilliseconds,
@@ -98,17 +107,19 @@ internal sealed class MainForm : Form
             Dock = DockStyle.Fill,
             ColumnCount = 1,
             Padding = new Padding(12),
-            RowCount = 4
+            RowCount = 5
         };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 25f));
-        root.RowStyles.Add(new RowStyle(SizeType.Percent, 50f));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 20f));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 20f));
+        root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        root.RowStyles.Add(new RowStyle(SizeType.Percent, 60f));
 
         root.Controls.Add(BuildHeaderPanel(), 0, 0);
         root.Controls.Add(BuildSection("Manual Connect", manualConnectTextBox), 0, 1);
         root.Controls.Add(BuildSection("Output Readiness", outputTextBox), 0, 2);
-        root.Controls.Add(BuildBottomSections(), 0, 3);
+        root.Controls.Add(BuildAudioActivitySection(), 0, 3);
+        root.Controls.Add(BuildBottomSections(), 0, 4);
 
         return root;
     }
@@ -171,6 +182,22 @@ internal sealed class MainForm : Form
         layout.Controls.Add(BuildSection("Session and Stream", sessionTextBox), 0, 0);
         layout.Controls.Add(BuildSection("Diagnostics", diagnosticsTextBox), 1, 0);
         return layout;
+    }
+
+    private Control BuildAudioActivitySection()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            RowCount = 2,
+            AutoSize = true
+        };
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.Controls.Add(signalMeterControl, 0, 0);
+        layout.Controls.Add(signalStatusLabel, 0, 1);
+        return BuildSection("Audio Activity", layout);
     }
 
     private static GroupBox BuildSection(string title, Control content)
@@ -378,6 +405,7 @@ internal sealed class MainForm : Form
         outputTextBox.Text = BuildOutputText(snapshot);
         sessionTextBox.Text = BuildSessionText(snapshot);
         diagnosticsTextBox.Text = BuildDiagnosticsText(snapshot);
+        ApplySignalMeter(snapshot);
 
         if (previousSnapshot is not null &&
             (previousSnapshot.Readiness.State != snapshot.Readiness.State ||
@@ -405,6 +433,7 @@ internal sealed class MainForm : Form
 
     private static string BuildOutputText(WindowsHostRuntimeSnapshot snapshot)
     {
+        var signalMeter = snapshot.AudioOutput.SignalMeter;
         var builder = new StringBuilder()
             .AppendLine($"Mode: {snapshot.Output.Mode}")
             .AppendLine($"State: {snapshot.Output.State}")
@@ -423,7 +452,8 @@ internal sealed class MainForm : Form
             .AppendLine($"Output Format: {snapshot.AudioOutput.OutputFormat}")
             .AppendLine($"Estimated Latency Ms: {snapshot.AudioOutput.EstimatedLatencyMs:F1}")
             .AppendLine($"Underruns: {snapshot.AudioOutput.UnderrunCount}")
-            .AppendLine($"Glitch Rate / Min: {snapshot.AudioOutput.GlitchRatePerMinute:F2}");
+            .AppendLine($"Glitch Rate / Min: {snapshot.AudioOutput.GlitchRatePerMinute:F2}")
+            .AppendLine($"Signal Peak / RMS: {FormatPercent(signalMeter.DisplayPeakNormalized)} / {FormatPercent(signalMeter.RmsNormalized)}");
 
         return builder.ToString().TrimEnd();
     }
@@ -494,6 +524,17 @@ internal sealed class MainForm : Form
         return builder.ToString().TrimEnd();
     }
 
+    private void ApplySignalMeter(WindowsHostRuntimeSnapshot snapshot)
+    {
+        var signalMeter = snapshot.AudioOutput.SignalMeter;
+        signalMeterControl.ApplyLevels(
+            signalMeter.RmsNormalized,
+            signalMeter.DisplayPeakNormalized,
+            signalMeter.SignalDetected,
+            signalMeter.ClippedSampleCount > 0);
+        signalStatusLabel.Text = BuildSignalStatusText(snapshot.Session.State, signalMeter);
+    }
+
     private static Color GetStateColor(HostReadinessState state) =>
         state switch
         {
@@ -506,4 +547,32 @@ internal sealed class MainForm : Form
 
     private static string FormatTimestamp(DateTimeOffset? value) =>
         value?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "n/a";
+
+    private static string BuildSignalStatusText(StreamSessionState sessionState, AudioLevelMeterSnapshot signalMeter)
+    {
+        var status = sessionState switch
+        {
+            StreamSessionState.Streaming when signalMeter.SignalDetected => "Active signal",
+            StreamSessionState.Streaming => "Streaming, but currently quiet",
+            StreamSessionState.Connected => "Connected, waiting for audio",
+            StreamSessionState.Listening => "Waiting for a client",
+            StreamSessionState.Disconnected => "Client disconnected",
+            StreamSessionState.Faulted => "Host faulted",
+            StreamSessionState.Stopped => "Host stopped",
+            _ => "Starting"
+        };
+
+        return string.Join(
+            "   ",
+            new[]
+            {
+                $"Status: {status}",
+                $"Peak: {FormatPercent(signalMeter.DisplayPeakNormalized)}",
+                $"RMS: {FormatPercent(signalMeter.RmsNormalized)}",
+                $"Clipped: {signalMeter.ClippedSampleCount}",
+                $"Last Signal: {FormatTimestamp(signalMeter.LastSignalAtUtc)}"
+            });
+    }
+
+    private static string FormatPercent(double value) => $"{Math.Round(Math.Max(0, Math.Min(1, value)) * 100):0}%";
 }

@@ -11,6 +11,7 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
     private readonly AudioStreamPipeline pipeline;
     private readonly OutputConfig config;
     private readonly object gate = new();
+    private readonly Pcm16AudioLevelMeter signalMeter = new();
     private readonly uint deviceHandleId;
     private readonly WaveOutDeviceInfo? selectedDevice;
     private readonly AudioFormat outputFormat;
@@ -90,6 +91,7 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
     {
         lock (gate)
         {
+            var observedAtUtc = DateTimeOffset.UtcNow;
             return new AudioOutputSnapshot(
                 SinkKind: "WaveOut",
                 DeviceId: config.DeviceId,
@@ -112,7 +114,8 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
                 StartedAtUtc: startedAtUtc,
                 LastFrameCapturedAtUtc: lastFrameCapturedAtUtc,
                 LastSubmittedAtUtc: lastSubmittedAtUtc,
-                LastCompletedAtUtc: lastCompletedAtUtc);
+                LastCompletedAtUtc: lastCompletedAtUtc,
+                SignalMeter: signalMeter.GetSnapshot(observedAtUtc));
         }
     }
 
@@ -224,7 +227,7 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
             }
 
             buffer.Submit(waveOutHandle, payload, config.DeviceId, isSilence);
-            RecordSubmission(sequenceNumber, capturedAtUtc, isSilence);
+            RecordSubmission(payload, sequenceNumber, capturedAtUtc, isSilence);
             queuedAny = true;
         }
 
@@ -276,7 +279,7 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
     {
         var buffer = buffers.First(candidate => !candidate.InFlight);
         buffer.Submit(waveOutHandle, payload, config.DeviceId, isSilence);
-        RecordSubmission(sequenceNumber, capturedAtUtc, isSilence);
+        RecordSubmission(payload, sequenceNumber, capturedAtUtc, isSilence);
     }
 
     private bool CompleteFinishedBuffers()
@@ -308,10 +311,11 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
         return completedAny;
     }
 
-    private void RecordSubmission(long? sequenceNumber, DateTimeOffset? capturedAtUtc, bool isSilence)
+    private void RecordSubmission(byte[] payload, long? sequenceNumber, DateTimeOffset? capturedAtUtc, bool isSilence)
     {
         lock (gate)
         {
+            var observedAtUtc = DateTimeOffset.UtcNow;
             submittedFrames++;
             if (isSilence)
             {
@@ -322,9 +326,10 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
             {
                 lastSequenceNumber = sequenceNumber;
                 lastFrameCapturedAtUtc = capturedAtUtc;
+                signalMeter.ObserveFrame(outputFormat, payload, observedAtUtc);
             }
 
-            lastSubmittedAtUtc = DateTimeOffset.UtcNow;
+            lastSubmittedAtUtc = observedAtUtc;
         }
     }
 
