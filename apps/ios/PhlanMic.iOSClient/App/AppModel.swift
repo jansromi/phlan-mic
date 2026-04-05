@@ -3,6 +3,96 @@ import Foundation
 
 @MainActor
 final class AppModel: ObservableObject {
+    private final class InputLevelUpdateBuffer: @unchecked Sendable {
+        private let lock = NSLock()
+        private let updateEveryCallbacks: Int
+        private var callbackCount = 0
+
+        init(updateEveryCallbacks: Int) {
+            self.updateEveryCallbacks = max(1, updateEveryCallbacks)
+        }
+
+        func record(_ inputLevel: AudioInputLevel) -> AudioInputLevel? {
+            lock.lock()
+            defer { lock.unlock() }
+
+            callbackCount += 1
+            if callbackCount == 1 || callbackCount.isMultiple(of: updateEveryCallbacks) {
+                return inputLevel
+            }
+
+            return nil
+        }
+    }
+
+    private final class CaptureFrameUpdateBuffer: @unchecked Sendable {
+        struct Snapshot: Sendable {
+            let capturedFrameCount: Int
+            let latestFrameSummary: String
+            let isFirstFrame: Bool
+        }
+
+        private let lock = NSLock()
+        private let updateEveryFrames: Int
+
+        init(updateEveryFrames: Int) {
+            self.updateEveryFrames = max(1, updateEveryFrames)
+        }
+
+        func record(_ frame: CapturedAudioFrame) -> Snapshot? {
+            lock.lock()
+            defer { lock.unlock() }
+
+            let capturedFrameCount = Int(frame.sequenceNumber + 1)
+            let isFirstFrame = frame.sequenceNumber == 0
+            if isFirstFrame || capturedFrameCount.isMultiple(of: updateEveryFrames) {
+                return Snapshot(
+                    capturedFrameCount: capturedFrameCount,
+                    latestFrameSummary: frame.debugSummary,
+                    isFirstFrame: isFirstFrame
+                )
+            }
+
+            return nil
+        }
+    }
+
+    private final class TransportSendProgressBuffer: @unchecked Sendable {
+        struct Snapshot: Sendable {
+            let totalFramesSent: Int
+            let totalBytesSent: Int
+            let isFirstSuccess: Bool
+        }
+
+        private let lock = NSLock()
+        private let flushEveryFrames: Int
+        private var totalFramesSent = 0
+        private var totalBytesSent = 0
+
+        init(flushEveryFrames: Int) {
+            self.flushEveryFrames = max(1, flushEveryFrames)
+        }
+
+        func recordSuccess(bytesSent: Int) -> Snapshot? {
+            lock.lock()
+            defer { lock.unlock() }
+
+            totalFramesSent += 1
+            totalBytesSent += bytesSent
+
+            let isFirstSuccess = totalFramesSent == 1
+            if isFirstSuccess || totalFramesSent.isMultiple(of: flushEveryFrames) {
+                return Snapshot(
+                    totalFramesSent: totalFramesSent,
+                    totalBytesSent: totalBytesSent,
+                    isFirstSuccess: isFirstSuccess
+                )
+            }
+
+            return nil
+        }
+    }
+
     enum SetupStatus: String {
         case setupRequired = "Setup Required"
         case ready = "Ready"
@@ -883,30 +973,51 @@ final class AppModel: ObservableObject {
         latestFrameSummary = "Waiting for the first framed packet."
 
         do {
+            let model = self
             let transportClient = currentTransportClient
+            let inputLevelUpdateBuffer = InputLevelUpdateBuffer(updateEveryCallbacks: streamToTransport ? 3 : 1)
+            let captureFrameUpdateBuffer = CaptureFrameUpdateBuffer(updateEveryFrames: streamToTransport ? 25 : 1)
+            let transportSendProgressBuffer = TransportSendProgressBuffer(flushEveryFrames: 25)
             let startup = try dependencies.startCapture(
                 .defaultVoice,
-                { [weak self] inputLevel in
-                    Task { @MainActor in
-                        self?.latestInputLevel = inputLevel
-                    }
-                },
-                { [weak self] frame in
-                    if streamToTransport {
-                        transportClient?.sendFrame(frame) { [weak self] result in
-                            Task { @MainActor in
-                                self?.handleSendCompletion(result, for: frame)
-                            }
-                        }
+                { inputLevel in
+                    guard let levelUpdate = inputLevelUpdateBuffer.record(inputLevel) else {
+                        return
                     }
 
                     Task { @MainActor in
-                        self?.handleCapturedFrame(frame, streamToTransport: streamToTransport)
+                        model.latestInputLevel = levelUpdate
                     }
                 },
-                { [weak self] error in
+                { frame in
+                    if let captureSnapshot = captureFrameUpdateBuffer.record(frame) {
+                        Task { @MainActor in
+                            model.handleCapturedFrameUpdate(captureSnapshot, streamToTransport: streamToTransport)
+                        }
+                    }
+
+                    if streamToTransport {
+                        transportClient?.sendFrame(frame) { result in
+                            switch result {
+                            case .success(let bytesSent):
+                                guard let progressSnapshot = transportSendProgressBuffer.recordSuccess(bytesSent: bytesSent) else {
+                                    return
+                                }
+
+                                Task { @MainActor in
+                                    model.handleSendProgress(progressSnapshot, latestFrame: frame)
+                                }
+                            case .failure:
+                                Task { @MainActor in
+                                    model.handleSendCompletion(result, for: frame)
+                                }
+                            }
+                        }
+                    }
+                },
+                { error in
                     Task { @MainActor in
-                        self?.handleCaptureFailure(error)
+                        model.handleCaptureFailure(error)
                     }
                 }
             )
@@ -943,18 +1054,20 @@ final class AppModel: ObservableObject {
         stopCapture(reason: "Capture stopped. Ready to start again.", logMessage: "Microphone capture stopped.")
     }
 
-    private func handleCapturedFrame(_ frame: CapturedAudioFrame, streamToTransport: Bool) {
-        capturedFrameCount = Int(frame.sequenceNumber + 1)
-        latestFrameSummary = frame.debugSummary
+    private func handleCapturedFrameUpdate(
+        _ snapshot: CaptureFrameUpdateBuffer.Snapshot,
+        streamToTransport: Bool
+    ) {
+        capturedFrameCount = snapshot.capturedFrameCount
+        latestFrameSummary = snapshot.latestFrameSummary
 
-        if frame.sequenceNumber == 0 {
+        if snapshot.isFirstFrame {
             if streamToTransport {
-                log("First microphone frame captured for streaming: \(frame.debugSummary).")
+                log("First microphone frame captured for streaming: \(snapshot.latestFrameSummary).")
             } else {
-                log("First microphone frame captured: \(frame.debugSummary).")
+                log("First microphone frame captured: \(snapshot.latestFrameSummary).")
             }
         }
-
     }
 
     private func handleCaptureFailure(_ error: Error) {
@@ -1057,6 +1170,27 @@ final class AppModel: ObservableObject {
                 detail: error.localizedDescription,
                 logMessage: "PCM send failed after frame \(frame.sequenceNumber): \(error.localizedDescription)"
             )
+        }
+    }
+
+    private func handleSendProgress(
+        _ snapshot: TransportSendProgressBuffer.Snapshot,
+        latestFrame: CapturedAudioFrame
+    ) {
+        guard captureOwnedByTransport || transportStatus == .connected || transportStatus == .streaming else {
+            return
+        }
+
+        transportFramesSent = snapshot.totalFramesSent
+        transportBytesSent = snapshot.totalBytesSent
+        lastSuccessfulSendTime = Date()
+
+        if transportStatus == .connected && snapshot.isFirstSuccess {
+            transportStatus = .streaming
+            transportDetail = streamingTransportDetail
+            log("Streaming started with microphone frame \(latestFrame.sequenceNumber) over \(hostConfiguration.transportMode.label).")
+        } else if transportFramesSent.isMultiple(of: 250) {
+            log("Streaming health: \(transportFramesSent) frames / \(transportBytesSent) bytes sent to \(hostConfiguration.displayEndpoint).")
         }
     }
 

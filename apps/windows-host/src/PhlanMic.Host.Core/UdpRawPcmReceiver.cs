@@ -543,7 +543,7 @@ public sealed class UdpRawPcmReceiver : IAudioInputSource
             }
 
             activeSession.LastActivityUtc = atUtc;
-            activeSession = null;
+            ResetActiveStreamStateLocked();
             return true;
         }
     }
@@ -623,7 +623,7 @@ public sealed class UdpRawPcmReceiver : IAudioInputSource
             }
 
             sessionId = activeSession.SessionId;
-            activeSession = null;
+            ResetActiveStreamStateLocked();
             return true;
         }
     }
@@ -647,9 +647,15 @@ public sealed class UdpRawPcmReceiver : IAudioInputSource
                 return false;
             }
 
-            activeSession = null;
+            ResetActiveStreamStateLocked();
             return true;
         }
+    }
+
+    private void ResetActiveStreamStateLocked()
+    {
+        pipeline.ResetForNewStream();
+        activeSession = null;
     }
 
     private async Task TrySendControlMessageAsync(

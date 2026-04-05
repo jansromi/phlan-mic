@@ -50,11 +50,14 @@ struct MicrophoneCaptureStartup: Equatable, Sendable {
     let outputFormatSummary: String
     let actualSampleRate: Double
     let actualBufferDuration: TimeInterval
+    let sessionCategory: String
+    let sessionMode: String
+    let routeSummary: String
 
     var debugSummary: String {
         let roundedSampleRate = Int(actualSampleRate.rounded())
         let roundedBufferMilliseconds = Int((actualBufferDuration * 1_000).rounded())
-        return "Input \(inputFormatSummary). Output \(outputFormatSummary). Session \(roundedSampleRate) Hz / \(roundedBufferMilliseconds) ms buffer."
+        return "Input \(inputFormatSummary). Output \(outputFormatSummary). Session \(roundedSampleRate) Hz / \(roundedBufferMilliseconds) ms buffer. Category \(sessionCategory), mode \(sessionMode), route \(routeSummary)."
     }
 }
 
@@ -147,7 +150,7 @@ final class MicrophoneCaptureClient {
 
         inputNode.installTap(
             onBus: 0,
-            bufferSize: AVAudioFrameCount(max(1_024, format.framesPerPacket)),
+            bufferSize: AVAudioFrameCount(format.framesPerPacket),
             format: inputFormat
         ) { [weak self] buffer, _ in
             self?.handleInputBuffer(buffer)
@@ -166,7 +169,10 @@ final class MicrophoneCaptureClient {
             inputFormatSummary: inputFormat.debugSummary,
             outputFormatSummary: targetFormat.debugSummary,
             actualSampleRate: session.sampleRate,
-            actualBufferDuration: session.ioBufferDuration
+            actualBufferDuration: session.ioBufferDuration,
+            sessionCategory: session.category.rawValue,
+            sessionMode: session.mode.rawValue,
+            routeSummary: Self.routeSummary(for: session.currentRoute)
         )
         #endif
     }
@@ -319,6 +325,14 @@ final class MicrophoneCaptureClient {
         let averageLevel = sqrt(squaredSum / Float(sampleCount))
         return AudioInputLevel(averageLevel: averageLevel, peakLevel: peakLevel)
     }
+
+    private static func routeSummary(for route: AVAudioSessionRouteDescription) -> String {
+        let inputs = route.inputs.map { "\($0.portType.rawValue)=\($0.portName)" }
+        let outputs = route.outputs.map { "\($0.portType.rawValue)=\($0.portName)" }
+        let inputSummary = inputs.isEmpty ? "none" : inputs.joined(separator: ", ")
+        let outputSummary = outputs.isEmpty ? "none" : outputs.joined(separator: ", ")
+        return "inputs[\(inputSummary)] outputs[\(outputSummary)]"
+    }
 }
 
 private final class ConversionInputSource: @unchecked Sendable {
@@ -342,6 +356,18 @@ private struct PCMFrameAccumulator {
     mutating func append(_ payload: Data) -> [CapturedAudioFrame] {
         guard !payload.isEmpty else {
             return []
+        }
+
+        if pendingPayload.isEmpty, payload.count == format.bytesPerPacket {
+            defer { nextSequenceNumber += 1 }
+            return [
+                CapturedAudioFrame(
+                    sequenceNumber: nextSequenceNumber,
+                    capturedAt: .milliseconds(Int64(nextSequenceNumber) * Int64(format.packetDurationMilliseconds)),
+                    format: format,
+                    payload: payload
+                )
+            ]
         }
 
         pendingPayload.append(payload)
