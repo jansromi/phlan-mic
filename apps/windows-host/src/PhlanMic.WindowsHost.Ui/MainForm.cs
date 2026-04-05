@@ -6,6 +6,8 @@ namespace PhlanMic.WindowsHost.Ui;
 
 internal sealed class MainForm : Form
 {
+    private static readonly TimeSpan SnapshotRefreshInterval = TimeSpan.FromMilliseconds(250);
+    private readonly object snapshotGate = new();
     private readonly WindowsHostRuntime runtime;
     private readonly StructuredConsoleLogger logger;
     private readonly string configPath;
@@ -19,7 +21,9 @@ internal sealed class MainForm : Form
     private readonly TextBox outputTextBox;
     private readonly TextBox sessionTextBox;
     private readonly TextBox diagnosticsTextBox;
+    private readonly System.Windows.Forms.Timer snapshotRefreshTimer;
     private WindowsHostRuntimeSnapshot? lastAppliedSnapshot;
+    private WindowsHostRuntimeSnapshot? pendingSnapshot;
     private bool changingRuntimeState;
 
     public MainForm(WindowsHostRuntime runtime, StructuredConsoleLogger logger, string configPath)
@@ -43,6 +47,11 @@ internal sealed class MainForm : Form
         outputTextBox = CreateMultilineTextBox();
         sessionTextBox = CreateMultilineTextBox();
         diagnosticsTextBox = CreateMultilineTextBox();
+        snapshotRefreshTimer = new System.Windows.Forms.Timer
+        {
+            Interval = (int)SnapshotRefreshInterval.TotalMilliseconds,
+            Enabled = true
+        };
 
         Controls.Add(BuildLayout());
 
@@ -57,13 +66,17 @@ internal sealed class MainForm : Form
             });
             await StartRuntimeAsync();
         };
+        snapshotRefreshTimer.Tick += (_, _) => FlushPendingSnapshot();
 
         runtime.SnapshotChanged += OnSnapshotChanged;
-        ApplySnapshot(runtime.Snapshot);
+        QueueSnapshot(runtime.Snapshot);
+        FlushPendingSnapshot();
     }
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        snapshotRefreshTimer.Stop();
+        snapshotRefreshTimer.Dispose();
         logger.Info("ui_window_closing", "The Windows host UI window is closing.", new Dictionary<string, object?>
         {
             ["readinessState"] = runtime.Snapshot.Readiness.State.ToString(),
@@ -302,9 +315,28 @@ internal sealed class MainForm : Form
             return;
         }
 
-        if (InvokeRequired)
+        QueueSnapshot(snapshot);
+    }
+
+    private void QueueSnapshot(WindowsHostRuntimeSnapshot snapshot)
+    {
+        lock (snapshotGate)
         {
-            BeginInvoke(new Action(() => ApplySnapshot(snapshot)));
+            pendingSnapshot = snapshot;
+        }
+    }
+
+    private void FlushPendingSnapshot()
+    {
+        WindowsHostRuntimeSnapshot? snapshot;
+        lock (snapshotGate)
+        {
+            snapshot = pendingSnapshot;
+            pendingSnapshot = null;
+        }
+
+        if (snapshot is null)
+        {
             return;
         }
 
