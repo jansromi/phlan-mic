@@ -4,7 +4,7 @@ Projects:
 
 - `src/PhlanMic.Host.Core`: transport-agnostic audio format, buffering, and stream pipeline primitives.
 - `src/PhlanMic.WindowsHost`: Windows-only startup, config loading, and readable console logging with optional JSON mode.
-- `src/PhlanMic.DebugTcpSender`: small debug sender for exercising the raw PCM TCP receiver.
+- `src/PhlanMic.DebugTcpSender`: sender/test tool for exercising both the raw PCM TCP receiver and the Phase 5 UDP transport.
 - `tests/PhlanMic.Host.Core.Tests`: core tests with no Windows-only dependencies.
 
 Current internal audio format for MVP:
@@ -44,7 +44,7 @@ dotnet run --project src/PhlanMic.WindowsHost
 
 ```powershell
 cd apps/windows-host
-dotnet run --project src/PhlanMic.DebugTcpSender -- --host 127.0.0.1 --port 42100 --frames 250 --mode sine
+dotnet run --project src/PhlanMic.DebugTcpSender -- --transport DebugTcpRawPcm --host 127.0.0.1 --port 42100 --frames 250 --mode sine
 ```
 
 Expected host behavior:
@@ -79,6 +79,11 @@ Expected host behavior:
 Useful environment overrides:
 
 ```powershell
+$env:PHLANMIC__RECEIVER__TRANSPORTMODE = "UdpRawPcm"
+$env:PHLANMIC__RECEIVER__AUDIOPORT = "42101"
+$env:PHLANMIC__RECEIVER__PAYLOADCODEC = "RawPcm16"
+$env:PHLANMIC__RECEIVER__KEEPALIVEINTERVALMS = "1000"
+$env:PHLANMIC__RECEIVER__SESSIONTIMEOUTMS = "5000"
 $env:PHLANMIC__OUTPUT__MODE = "DebugDrain"
 $env:PHLANMIC__OUTPUT__DEVICEID = "1"
 $env:PHLANMIC__OUTPUT__ENDPOINTID = "{0.0.0.00000000}.{example-endpoint-guid}"
@@ -153,6 +158,29 @@ powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -Mode VbCabl
 powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -Mode VbCable -Scenario Burst -DelayPatternMs "10,30"
 powershell -ExecutionPolicy Bypass -File .\scripts\phase2-smoke.ps1 -Mode VbCable -Scenario Reconnect -ReconnectPauseMs 300
 ```
+
+Phase 5 real-transport bring-up:
+
+1. Start the host in `UdpRawPcm` mode:
+
+```powershell
+cd apps/windows-host
+$env:PHLANMIC__RECEIVER__TRANSPORTMODE = "UdpRawPcm"
+dotnet run --project src/PhlanMic.WindowsHost
+```
+
+2. In a second terminal, stream through the Phase 5 control + UDP path:
+
+```powershell
+cd apps/windows-host
+dotnet run --project src/PhlanMic.DebugTcpSender -- --transport UdpRawPcm --host 127.0.0.1 --port 42100 --frames 250 --mode sine
+```
+
+Expected host behavior:
+
+- `host_ready` includes `controlPort`, `audioPort`, `transportMode`, and `payloadCodec`.
+- The session transitions to `Connected` after `hello`, then `Streaming` after the first UDP audio packet.
+- `stream_stats` and `audio_output_summary` include transport counters such as `controlMessagesReceived`, `duplicatePackets`, `outOfOrderPackets`, `audioPacketsRejected`, and `decodeFailureCount`.
 
 Artifacts are written under `artifacts\phase2-smoke\`:
 

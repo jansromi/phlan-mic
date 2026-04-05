@@ -39,6 +39,10 @@ internal sealed class HostConfigLoader
         var bindAddress = GetEnvironmentValue("RECEIVER__BINDADDRESS") ?? config.Receiver.BindAddress;
         var transportMode = GetEnvironmentValue("RECEIVER__TRANSPORTMODE") ?? config.Receiver.TransportMode;
         var port = ParseInt("RECEIVER__PORT") ?? config.Receiver.Port;
+        var audioPort = ParseInt("RECEIVER__AUDIOPORT") ?? config.Receiver.AudioPort;
+        var payloadCodec = GetEnvironmentValue("RECEIVER__PAYLOADCODEC") ?? config.Receiver.PayloadCodec;
+        var keepAliveIntervalMs = ParseInt("RECEIVER__KEEPALIVEINTERVALMS") ?? config.Receiver.KeepAliveIntervalMs;
+        var sessionTimeoutMs = ParseInt("RECEIVER__SESSIONTIMEOUTMS") ?? config.Receiver.SessionTimeoutMs;
         var maxBufferedFrames = ParseInt("BUFFER__MAXBUFFEREDFRAMES") ?? config.Buffer.MaxBufferedFrames;
         var dropOldestWhenFull = ParseBool("BUFFER__DROPOLDESTWHENFULL") ?? config.Buffer.DropOldestWhenFull;
         var startupPrebufferFrames = ParseInt("ROBUSTNESS__STARTUPPREBUFFERFRAMES") ?? config.Robustness.StartupPrebufferFrames;
@@ -68,7 +72,11 @@ internal sealed class HostConfigLoader
             {
                 BindAddress = bindAddress,
                 Port = port,
-                TransportMode = transportMode
+                TransportMode = transportMode,
+                AudioPort = audioPort,
+                PayloadCodec = payloadCodec,
+                KeepAliveIntervalMs = keepAliveIntervalMs,
+                SessionTimeoutMs = sessionTimeoutMs
             },
             Buffer = config.Buffer with
             {

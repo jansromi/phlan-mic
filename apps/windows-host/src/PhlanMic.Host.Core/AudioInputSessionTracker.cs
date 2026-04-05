@@ -18,6 +18,14 @@ internal sealed class AudioInputSessionTracker
     private long bytesReceived;
     private long packetsReceived;
     private long framesReceived;
+    private long controlMessagesReceived;
+    private long controlMessagesSent;
+    private long controlTimeoutCount;
+    private long protocolErrorCount;
+    private long audioPacketsRejected;
+    private long duplicatePackets;
+    private long outOfOrderPackets;
+    private long decodeFailureCount;
 
     public AudioInputSessionTracker(string transportMode)
     {
@@ -54,7 +62,16 @@ internal sealed class AudioInputSessionTracker
                 pipeline.DroppedFrames,
                 pipeline.BufferedFrameCount,
                 lastActivityUtc,
-                pipeline.GetRobustnessSnapshot());
+                pipeline.GetRobustnessSnapshot(),
+                new TransportStatisticsSnapshot(
+                    controlMessagesReceived,
+                    controlMessagesSent,
+                    controlTimeoutCount,
+                    protocolErrorCount,
+                    audioPacketsRejected,
+                    duplicatePackets,
+                    outOfOrderPackets,
+                    decodeFailureCount));
         }
     }
 
@@ -159,6 +176,78 @@ internal sealed class AudioInputSessionTracker
             bytesReceived += bytes;
             packetsReceived += packets;
             framesReceived += frames;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordControlMessageReceived(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            controlMessagesReceived++;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordControlMessageSent(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            controlMessagesSent++;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordControlTimeout(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            controlTimeoutCount++;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordProtocolError(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            protocolErrorCount++;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordRejectedPacket(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            audioPacketsRejected++;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordDuplicatePacket(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            duplicatePackets++;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordOutOfOrderPacket(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            outOfOrderPackets++;
+            lastActivityUtc = atUtc;
+        }
+    }
+
+    public void RecordDecodeFailure(DateTimeOffset atUtc)
+    {
+        lock (gate)
+        {
+            decodeFailureCount++;
             lastActivityUtc = atUtc;
         }
     }

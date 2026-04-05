@@ -4,6 +4,8 @@ namespace PhlanMic.DebugTcpSender;
 
 internal sealed record DebugTcpSenderOptions
 {
+    public string TransportMode { get; init; } = ReceiverConfig.DebugTcpRawPcmTransportMode;
+
     public string Host { get; init; } = "127.0.0.1";
 
     public int Port { get; init; } = 42_100;
@@ -24,8 +26,19 @@ internal sealed record DebugTcpSenderOptions
 
     public AudioFormat Format { get; init; } = AudioFormat.CreateMvpDefault();
 
+    public int KeepAliveIntervalMs { get; init; } = 1_000;
+
+    public int SessionTimeoutMs { get; init; } = 5_000;
+
     public void Validate()
     {
+        if (!string.Equals(TransportMode, ReceiverConfig.DebugTcpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(TransportMode, ReceiverConfig.UdpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException(
+                $"Transport mode must be '{ReceiverConfig.DebugTcpRawPcmTransportMode}' or '{ReceiverConfig.UdpRawPcmTransportMode}'.");
+        }
+
         if (string.IsNullOrWhiteSpace(Host))
         {
             throw new InvalidOperationException("Host must be provided.");
@@ -72,6 +85,16 @@ internal sealed record DebugTcpSenderOptions
             throw new InvalidOperationException("Pause duration must be zero or greater.");
         }
 
+        if (KeepAliveIntervalMs <= 0)
+        {
+            throw new InvalidOperationException("Keep-alive interval must be greater than zero.");
+        }
+
+        if (SessionTimeoutMs <= KeepAliveIntervalMs)
+        {
+            throw new InvalidOperationException("Session timeout must be greater than the keep-alive interval.");
+        }
+
         Format.Validate();
     }
 
@@ -100,6 +123,7 @@ internal sealed record DebugTcpSenderOptions
             var value = args[++index];
             options = argument switch
             {
+                "--transport" => options with { TransportMode = value },
                 "--host" => options with { Host = value },
                 "--port" => options with { Port = ParseInt(argument, value) },
                 "--frames" => options with { FrameCount = ParseInt(argument, value) },
@@ -109,6 +133,8 @@ internal sealed record DebugTcpSenderOptions
                 "--delay-pattern-ms" => options with { DelayPatternMs = ParseDelayPattern(argument, value) },
                 "--pause-after-frames" => options with { PauseAfterFrames = ParseInt(argument, value) },
                 "--pause-duration-ms" => options with { PauseDurationMs = ParseInt(argument, value) },
+                "--keepalive-ms" => options with { KeepAliveIntervalMs = ParseInt(argument, value) },
+                "--session-timeout-ms" => options with { SessionTimeoutMs = ParseInt(argument, value) },
                 "--sample-rate" => options with { Format = options.Format with { SampleRate = ParseInt(argument, value) } },
                 "--channels" => options with { Format = options.Format with { Channels = ParseInt(argument, value) } },
                 "--frame-duration-ms" => options with { Format = options.Format with { FrameDurationMs = ParseInt(argument, value) } },
@@ -126,8 +152,9 @@ internal sealed record DebugTcpSenderOptions
           dotnet run --project .\src\PhlanMic.DebugTcpSender -- [options]
 
         Options:
+          --transport <mode>          Transport mode. DebugTcpRawPcm or UdpRawPcm. Default: DebugTcpRawPcm
           --host <name>               Target host. Default: 127.0.0.1
-          --port <number>             Target port. Default: 42100
+          --port <number>             Target TCP port. Debug mode uses it for PCM. UDP mode uses it for control. Default: 42100
           --frames <number>           Number of frames to send. 0 means until Ctrl+C. Default: 250
           --mode <sine|silence>       Signal type. Default: sine
           --frequency-hz <number>     Sine frequency. Default: 1000
@@ -135,6 +162,8 @@ internal sealed record DebugTcpSenderOptions
           --delay-pattern-ms <list>   Comma-separated per-frame delays in ms, repeated cyclically
           --pause-after-frames <num>  Pause once after this many frames. Default: 0
           --pause-duration-ms <num>   Pause length in ms. Default: 0
+          --keepalive-ms <number>     UDP control keep-alive interval. Default: 1000
+          --session-timeout-ms <num>  UDP control session timeout. Default: 5000
           --sample-rate <number>      PCM sample rate. Default: 48000
           --channels <number>         PCM channel count. Default: 1
           --frame-duration-ms <num>   Frame duration. Default: 20

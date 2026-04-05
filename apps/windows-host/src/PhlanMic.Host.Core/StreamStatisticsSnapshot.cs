@@ -9,4 +9,5 @@ public sealed record StreamStatisticsSnapshot(
     long DroppedFrames,
     int BufferedFrameCount,
     DateTimeOffset? LastActivityUtc,
-    StreamRobustnessSnapshot Robustness);
+    StreamRobustnessSnapshot Robustness,
+    TransportStatisticsSnapshot Transport);

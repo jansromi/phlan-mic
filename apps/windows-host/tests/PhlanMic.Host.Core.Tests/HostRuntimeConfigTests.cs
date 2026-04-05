@@ -67,6 +67,59 @@ public sealed class HostRuntimeConfigTests
     }
 
     [Fact]
+    public void ValidateAcceptsUdpRawPcmTransportMode()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Receiver = new ReceiverConfig
+            {
+                TransportMode = ReceiverConfig.UdpRawPcmTransportMode,
+                Port = 42_100,
+                AudioPort = 42_101,
+                PayloadCodec = "RawPcm16",
+                KeepAliveIntervalMs = 1000,
+                SessionTimeoutMs = 5000
+            }
+        };
+
+        config.Validate();
+    }
+
+    [Fact]
+    public void ValidateRejectsUdpAudioPortEqualToControlPort()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Receiver = new ReceiverConfig
+            {
+                TransportMode = ReceiverConfig.UdpRawPcmTransportMode,
+                Port = 42_100,
+                AudioPort = 42_100
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("audio port", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ValidateRejectsSessionTimeoutLessThanKeepAliveInterval()
+    {
+        var config = new HostRuntimeConfig
+        {
+            Receiver = new ReceiverConfig
+            {
+                TransportMode = ReceiverConfig.UdpRawPcmTransportMode,
+                KeepAliveIntervalMs = 5000,
+                SessionTimeoutMs = 5000
+            }
+        };
+
+        var exception = Assert.Throws<InvalidOperationException>(config.Validate);
+        Assert.Contains("timeout", exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void ValidateRejectsUnsupportedOutputMode()
     {
         var config = new HostRuntimeConfig

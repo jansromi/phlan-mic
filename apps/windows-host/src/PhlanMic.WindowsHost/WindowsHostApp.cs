@@ -32,8 +32,12 @@ internal sealed class WindowsHostApp
         {
             ["sessionName"] = config.SessionName,
             ["bindAddress"] = config.Receiver.BindAddress,
-            ["port"] = config.Receiver.Port,
+            ["controlPort"] = config.Receiver.Port,
+            ["audioPort"] = string.Equals(config.Receiver.TransportMode, ReceiverConfig.UdpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase)
+                ? config.Receiver.GetResolvedAudioPort()
+                : null,
             ["transportMode"] = config.Receiver.TransportMode,
+            ["payloadCodec"] = config.Receiver.PayloadCodec,
             ["inputSource"] = inputSource.GetType().Name,
             ["outputMode"] = config.Output.Mode,
             ["outputSink"] = outputSnapshot.SinkKind,
@@ -83,7 +87,23 @@ internal sealed class WindowsHostApp
     private IAudioInputSource CreateInputSource(AudioStreamPipeline pipeline) =>
         config.TestMode.Enabled
             ? new GeneratedSignalTestSource(config.AudioFormat, config.TestMode, pipeline)
-            : new DebugTcpRawPcmReceiver(config.Receiver, config.AudioFormat, pipeline);
+            : CreateReceiverInputSource(pipeline);
+
+    private IAudioInputSource CreateReceiverInputSource(AudioStreamPipeline pipeline)
+    {
+        if (string.Equals(config.Receiver.TransportMode, ReceiverConfig.DebugTcpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase))
+        {
+            return new DebugTcpRawPcmReceiver(config.Receiver, config.AudioFormat, pipeline);
+        }
+
+        if (string.Equals(config.Receiver.TransportMode, ReceiverConfig.UdpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase))
+        {
+            return new UdpRawPcmReceiver(config.Receiver, config.AudioFormat, pipeline);
+        }
+
+        throw new InvalidOperationException(
+            $"Receiver transport mode '{config.Receiver.TransportMode}' is not supported by WindowsHostApp.");
+    }
 
     private IAudioOutputSink CreateOutputSink(AudioStreamPipeline pipeline)
     {
@@ -221,6 +241,14 @@ internal sealed class WindowsHostApp
                     ["acceptedFrames"] = stats.AcceptedFrames,
                     ["rejectedFrames"] = stats.RejectedFrames,
                     ["droppedFrames"] = stats.DroppedFrames,
+                    ["controlMessagesReceived"] = stats.Transport.ControlMessagesReceived,
+                    ["controlMessagesSent"] = stats.Transport.ControlMessagesSent,
+                    ["controlTimeoutCount"] = stats.Transport.ControlTimeoutCount,
+                    ["protocolErrorCount"] = stats.Transport.ProtocolErrorCount,
+                    ["audioPacketsRejected"] = stats.Transport.AudioPacketsRejected,
+                    ["duplicatePackets"] = stats.Transport.DuplicatePackets,
+                    ["outOfOrderPackets"] = stats.Transport.OutOfOrderPackets,
+                    ["decodeFailureCount"] = stats.Transport.DecodeFailureCount,
                     ["bufferedFrames"] = stats.BufferedFrameCount,
                     ["streamRobustnessState"] = robustness.State.ToString(),
                     ["expectedNextSequence"] = robustness.ExpectedNextSequence,
@@ -381,6 +409,14 @@ internal sealed class WindowsHostApp
             ["acceptedFrames"] = inputStats.AcceptedFrames,
             ["rejectedFrames"] = inputStats.RejectedFrames,
             ["droppedFrames"] = inputStats.DroppedFrames,
+            ["controlMessagesReceived"] = inputStats.Transport.ControlMessagesReceived,
+            ["controlMessagesSent"] = inputStats.Transport.ControlMessagesSent,
+            ["controlTimeoutCount"] = inputStats.Transport.ControlTimeoutCount,
+            ["protocolErrorCount"] = inputStats.Transport.ProtocolErrorCount,
+            ["audioPacketsRejected"] = inputStats.Transport.AudioPacketsRejected,
+            ["duplicatePackets"] = inputStats.Transport.DuplicatePackets,
+            ["outOfOrderPackets"] = inputStats.Transport.OutOfOrderPackets,
+            ["decodeFailureCount"] = inputStats.Transport.DecodeFailureCount,
             ["bufferedFrames"] = inputStats.BufferedFrameCount,
             ["streamRobustnessState"] = inputStats.Robustness.State.ToString(),
             ["expectedNextSequence"] = inputStats.Robustness.ExpectedNextSequence,
