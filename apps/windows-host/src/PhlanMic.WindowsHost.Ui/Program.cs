@@ -71,7 +71,7 @@ internal static class Program
         }
     }
 
-    private static partial class ConsoleHost
+    private static class ConsoleHost
     {
         private const uint AttachParentProcess = 0xFFFFFFFF;
 
@@ -100,8 +100,8 @@ internal static class Program
                 AutoFlush = true
             };
 
-        [LibraryImport("kernel32.dll", SetLastError = true)]
+        [DllImport("kernel32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
-        private static partial bool AttachConsole(uint dwProcessId);
+        private static extern bool AttachConsole(uint dwProcessId);
     }
 }
