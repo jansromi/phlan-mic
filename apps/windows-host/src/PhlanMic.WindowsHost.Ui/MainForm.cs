@@ -87,11 +87,13 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Top,
             AutoSize = true,
-            ColumnCount = 2,
+            ColumnCount = 1,
+            RowCount = 2,
             Padding = new Padding(0, 0, 0, 12)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
         var detailsPanel = new TableLayoutPanel
         {
@@ -111,15 +113,17 @@ internal sealed class MainForm : Form
         var buttonPanel = new FlowLayoutPanel
         {
             AutoSize = true,
-            Dock = DockStyle.Right,
+            Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.LeftToRight
         };
+        buttonPanel.WrapContents = true;
+        buttonPanel.Margin = new Padding(0, 8, 0, 0);
         buttonPanel.Controls.Add(startButton);
         buttonPanel.Controls.Add(stopButton);
         buttonPanel.Controls.Add(copyButton);
 
         layout.Controls.Add(detailsPanel, 0, 0);
-        layout.Controls.Add(buttonPanel, 1, 0);
+        layout.Controls.Add(buttonPanel, 0, 1);
         return layout;
     }
 
