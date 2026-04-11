@@ -1,132 +1,21 @@
-using System.Globalization;
-using System.Text.Json;
 using PhlanMic.Host.Core;
 
 namespace PhlanMic.WindowsHost;
 
 public sealed class HostConfigLoader
 {
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private readonly HostConfigStore configStore;
+
+    public HostConfigLoader()
+        : this(new HostConfigStore())
     {
-        PropertyNameCaseInsensitive = true,
-        WriteIndented = true
-    };
+    }
+
+    public HostConfigLoader(HostConfigStore configStore)
+    {
+        this.configStore = configStore ?? throw new ArgumentNullException(nameof(configStore));
+    }
 
     public HostRuntimeConfig Load(string configPath)
-    {
-        if (string.IsNullOrWhiteSpace(configPath))
-        {
-            throw new ArgumentException("Config path must be provided.", nameof(configPath));
-        }
-
-        if (!File.Exists(configPath))
-        {
-            throw new FileNotFoundException($"Config file was not found: {configPath}", configPath);
-        }
-
-        var json = File.ReadAllText(configPath);
-        var config = JsonSerializer.Deserialize<HostRuntimeConfig>(json, JsonOptions) ?? new HostRuntimeConfig();
-        config = ApplyEnvironmentOverrides(config);
-        config.Validate();
-        return config;
-    }
-
-    private static HostRuntimeConfig ApplyEnvironmentOverrides(HostRuntimeConfig config)
-    {
-        var sessionName = GetEnvironmentValue("SESSIONNAME") ?? config.SessionName;
-        var logLevel = GetEnvironmentValue("LOGLEVEL") ?? config.LogLevel;
-        var logFormat = GetEnvironmentValue("LOGFORMAT") ?? config.LogFormat;
-        var bindAddress = GetEnvironmentValue("RECEIVER__BINDADDRESS") ?? config.Receiver.BindAddress;
-        var transportMode = GetEnvironmentValue("RECEIVER__TRANSPORTMODE") ?? config.Receiver.TransportMode;
-        var port = ParseInt("RECEIVER__PORT") ?? config.Receiver.Port;
-        var audioPort = ParseInt("RECEIVER__AUDIOPORT") ?? config.Receiver.AudioPort;
-        var payloadCodec = GetEnvironmentValue("RECEIVER__PAYLOADCODEC") ?? config.Receiver.PayloadCodec;
-        var keepAliveIntervalMs = ParseInt("RECEIVER__KEEPALIVEINTERVALMS") ?? config.Receiver.KeepAliveIntervalMs;
-        var sessionTimeoutMs = ParseInt("RECEIVER__SESSIONTIMEOUTMS") ?? config.Receiver.SessionTimeoutMs;
-        var maxBufferedFrames = ParseInt("BUFFER__MAXBUFFEREDFRAMES") ?? config.Buffer.MaxBufferedFrames;
-        var dropOldestWhenFull = ParseBool("BUFFER__DROPOLDESTWHENFULL") ?? config.Buffer.DropOldestWhenFull;
-        var startupPrebufferFrames = ParseInt("ROBUSTNESS__STARTUPPREBUFFERFRAMES") ?? config.Robustness.StartupPrebufferFrames;
-        var targetBufferedFrames = ParseInt("ROBUSTNESS__TARGETBUFFEREDFRAMES") ?? config.Robustness.TargetBufferedFrames;
-        var maxLateFrameToleranceFrames = ParseInt("ROBUSTNESS__MAXLATEFRAMETOLERANCEFRAMES") ?? config.Robustness.MaxLateFrameToleranceFrames;
-        var missingFrameGraceMs = ParseInt("ROBUSTNESS__MISSINGFRAMEGRACEMS") ?? config.Robustness.MissingFrameGraceMs;
-        var concealMissingFramesWithSilence = ParseBool("ROBUSTNESS__CONCEALMISSINGFRAMESWITHSILENCE") ?? config.Robustness.ConcealMissingFramesWithSilence;
-        var sampleRate = ParseInt("AUDIOFORMAT__SAMPLERATE") ?? config.AudioFormat.SampleRate;
-        var channels = ParseInt("AUDIOFORMAT__CHANNELS") ?? config.AudioFormat.Channels;
-        var bitsPerSample = ParseInt("AUDIOFORMAT__BITSPERSAMPLE") ?? config.AudioFormat.BitsPerSample;
-        var frameDurationMs = ParseInt("AUDIOFORMAT__FRAMEDURATIONMS") ?? config.AudioFormat.FrameDurationMs;
-        var testModeEnabled = ParseBool("TESTMODE__ENABLED") ?? config.TestMode.Enabled;
-        var signalFrequencyHz = ParseInt("TESTMODE__SIGNALFREQUENCYHZ") ?? config.TestMode.SignalFrequencyHz;
-        var outputMode = GetEnvironmentValue("OUTPUT__MODE") ?? config.Output.Mode;
-        var outputDeviceId = ParseInt("OUTPUT__DEVICEID") ?? config.Output.DeviceId;
-        var outputEndpointId = GetEnvironmentValue("OUTPUT__ENDPOINTID") ?? config.Output.EndpointId;
-        var outputTargetLatencyMs = ParseInt("OUTPUT__TARGETLATENCYMS") ?? config.Output.TargetLatencyMs;
-        var logAvailableDevices = ParseBool("OUTPUT__LOGAVAILABLEDEVICES") ?? config.Output.LogAvailableDevices;
-        var logEndpointInventory = ParseBool("OUTPUT__LOGENDPOINTINVENTORY") ?? config.Output.LogEndpointInventory;
-
-        return config with
-        {
-            SessionName = sessionName,
-            LogLevel = logLevel,
-            LogFormat = logFormat,
-            Receiver = config.Receiver with
-            {
-                BindAddress = bindAddress,
-                Port = port,
-                TransportMode = transportMode,
-                AudioPort = audioPort,
-                PayloadCodec = payloadCodec,
-                KeepAliveIntervalMs = keepAliveIntervalMs,
-                SessionTimeoutMs = sessionTimeoutMs
-            },
-            Buffer = config.Buffer with
-            {
-                MaxBufferedFrames = maxBufferedFrames,
-                DropOldestWhenFull = dropOldestWhenFull
-            },
-            Robustness = config.Robustness with
-            {
-                StartupPrebufferFrames = startupPrebufferFrames,
-                TargetBufferedFrames = targetBufferedFrames,
-                MaxLateFrameToleranceFrames = maxLateFrameToleranceFrames,
-                MissingFrameGraceMs = missingFrameGraceMs,
-                ConcealMissingFramesWithSilence = concealMissingFramesWithSilence
-            },
-            AudioFormat = config.AudioFormat with
-            {
-                SampleRate = sampleRate,
-                Channels = channels,
-                BitsPerSample = bitsPerSample,
-                FrameDurationMs = frameDurationMs
-            },
-            TestMode = config.TestMode with
-            {
-                Enabled = testModeEnabled,
-                SignalFrequencyHz = signalFrequencyHz
-            },
-            Output = config.Output with
-            {
-                Mode = outputMode,
-                DeviceId = outputDeviceId,
-                EndpointId = outputEndpointId,
-                TargetLatencyMs = outputTargetLatencyMs,
-                LogAvailableDevices = logAvailableDevices,
-                LogEndpointInventory = logEndpointInventory
-            }
-        };
-    }
-
-    private static string? GetEnvironmentValue(string suffix) =>
-        Environment.GetEnvironmentVariable($"PHLANMIC__{suffix}");
-
-    private static int? ParseInt(string suffix)
-    {
-        var raw = GetEnvironmentValue(suffix);
-        return raw is not null ? int.Parse(raw, CultureInfo.InvariantCulture) : null;
-    }
-
-    private static bool? ParseBool(string suffix)
-    {
-        var raw = GetEnvironmentValue(suffix);
-        return raw is not null ? bool.Parse(raw) : null;
-    }
+        => configStore.LoadEffective(configPath);
 }

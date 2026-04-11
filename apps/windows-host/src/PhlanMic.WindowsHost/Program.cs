@@ -2,11 +2,11 @@ using PhlanMic.WindowsHost;
 
 var configPath = args.Length > 0 ? Path.GetFullPath(args[0]) : Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 var logger = new StructuredConsoleLogger();
+var configStore = new PhlanMic.Host.Core.HostConfigStore();
 
 try
 {
-    var loader = new HostConfigLoader();
-    var config = loader.Load(configPath);
+    var config = configStore.LoadEffective(configPath);
     logger.MinimumLevel = StructuredLogLevelParser.Parse(config.LogLevel);
     logger.OutputFormat = StructuredConsoleLogFormatParser.Parse(config.LogFormat);
     using var cancellation = new CancellationTokenSource();

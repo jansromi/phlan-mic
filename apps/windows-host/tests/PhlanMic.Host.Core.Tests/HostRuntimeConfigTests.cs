@@ -10,6 +10,7 @@ public sealed class HostRuntimeConfigTests
         var config = new HostRuntimeConfig();
 
         Assert.Equal("Text", config.LogFormat);
+        Assert.Equal(OutputConfig.VbCableMode, config.Output.Mode);
         config.Validate();
     }
 

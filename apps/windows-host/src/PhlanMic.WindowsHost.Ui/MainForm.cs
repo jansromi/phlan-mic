@@ -9,7 +9,8 @@ internal sealed class MainForm : Form
 {
     private static readonly TimeSpan SnapshotRefreshInterval = TimeSpan.FromMilliseconds(250);
     private readonly object snapshotGate = new();
-    private readonly WindowsHostRuntime runtime;
+    private readonly HostConfigStore configStore;
+    private readonly HostOutputDeviceCatalog outputCatalog;
     private readonly StructuredConsoleLogger logger;
     private readonly string configPath;
     private readonly Label stateValueLabel;
@@ -17,6 +18,7 @@ internal sealed class MainForm : Form
     private readonly Label configPathValueLabel;
     private readonly Button startButton;
     private readonly Button stopButton;
+    private readonly Button settingsButton;
     private readonly Button copyButton;
     private readonly TextBox manualConnectTextBox;
     private readonly TextBox outputTextBox;
@@ -24,15 +26,24 @@ internal sealed class MainForm : Form
     private readonly TextBox diagnosticsTextBox;
     private readonly AudioLevelMeterControl signalMeterControl;
     private readonly System.Windows.Forms.Timer snapshotRefreshTimer;
+    private WindowsHostRuntime runtime;
     private WindowsHostRuntimeSnapshot? lastAppliedSnapshot;
     private WindowsHostRuntimeSnapshot? pendingSnapshot;
+    private HostRuntimeConfig? pendingEffectiveConfig;
     private bool changingRuntimeState;
 
-    public MainForm(WindowsHostRuntime runtime, StructuredConsoleLogger logger, string configPath)
+    public MainForm(
+        HostConfigStore configStore,
+        HostOutputDeviceCatalog outputCatalog,
+        HostRuntimeConfig initialEffectiveConfig,
+        StructuredConsoleLogger logger,
+        string configPath)
     {
-        this.runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
+        this.configStore = configStore ?? throw new ArgumentNullException(nameof(configStore));
+        this.outputCatalog = outputCatalog ?? throw new ArgumentNullException(nameof(outputCatalog));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.configPath = configPath ?? throw new ArgumentNullException(nameof(configPath));
+        runtime = CreateRuntime(initialEffectiveConfig ?? throw new ArgumentNullException(nameof(initialEffectiveConfig)));
 
         Text = "PhlanMic Windows Host";
         var applicationIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -49,6 +60,7 @@ internal sealed class MainForm : Form
         configPathValueLabel = CreateValueLabel();
         startButton = new Button { AutoSize = true, Text = "Start Host" };
         stopButton = new Button { AutoSize = true, Text = "Stop Host" };
+        settingsButton = new Button { AutoSize = true, Text = "Settings..." };
         copyButton = new Button { AutoSize = true, Text = "Copy Manual Connect" };
         manualConnectTextBox = CreateMultilineTextBox();
         outputTextBox = CreateMultilineTextBox();
@@ -69,6 +81,7 @@ internal sealed class MainForm : Form
 
         startButton.Click += async (_, _) => await StartRuntimeAsync();
         stopButton.Click += async (_, _) => await StopRuntimeAsync();
+        settingsButton.Click += async (_, _) => await OpenSettingsAsync();
         copyButton.Click += (_, _) => CopyManualConnect();
         Shown += (_, _) =>
         {
@@ -173,6 +186,7 @@ internal sealed class MainForm : Form
         buttonPanel.Margin = new Padding(0, 8, 0, 0);
         buttonPanel.Controls.Add(startButton);
         buttonPanel.Controls.Add(stopButton);
+        buttonPanel.Controls.Add(settingsButton);
         buttonPanel.Controls.Add(copyButton);
 
         layout.Controls.Add(detailsPanel, 0, 0);
@@ -265,6 +279,7 @@ internal sealed class MainForm : Form
         {
             changingRuntimeState = true;
             UpdateButtons(runtime.Snapshot);
+            await ApplyPendingEffectiveConfigIfPossibleAsync();
             logger.Info("ui_start_requested", "Start host was requested from the desktop UI.", new Dictionary<string, object?>
             {
                 ["configPath"] = configPath,
@@ -308,6 +323,7 @@ internal sealed class MainForm : Form
                 ["connectionCount"] = runtime.Snapshot.Session.ConnectionCount
             });
             await runtime.StopAsync();
+            await ApplyPendingEffectiveConfigIfPossibleAsync();
         }
         catch (Exception exception)
         {
@@ -325,6 +341,64 @@ internal sealed class MainForm : Form
         {
             changingRuntimeState = false;
             UpdateButtons(runtime.Snapshot);
+        }
+    }
+
+    private async Task OpenSettingsAsync()
+    {
+        if (changingRuntimeState)
+        {
+            return;
+        }
+
+        try
+        {
+            var rawConfig = configStore.LoadRaw(configPath);
+            var environmentOverrides = configStore.GetEnvironmentOverrides();
+
+            using var dialog = new SettingsForm(configStore, outputCatalog, configPath, rawConfig, environmentOverrides);
+            if (dialog.ShowDialog(this) != DialogResult.OK)
+            {
+                return;
+            }
+
+            var effectiveConfig = configStore.LoadEffective(configPath);
+            var runtimeIsActive = runtime.Snapshot.Readiness.State is HostReadinessState.Starting or HostReadinessState.Ready or HostReadinessState.Streaming;
+
+            if (runtimeIsActive)
+            {
+                var response = MessageBox.Show(
+                    this,
+                    "Settings were saved. Restart the host now to apply them?",
+                    Text,
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (response == DialogResult.Yes)
+                {
+                    await RestartRuntimeAsync(effectiveConfig);
+                }
+                else
+                {
+                    pendingEffectiveConfig = effectiveConfig;
+                }
+
+                return;
+            }
+
+            await ReplaceRuntimeAsync(effectiveConfig, startAfterReplace: false);
+        }
+        catch (Exception exception)
+        {
+            logger.Error("ui_open_settings_failed", "Opening or applying host settings from the desktop UI failed.", exception, new Dictionary<string, object?>
+            {
+                ["configPath"] = configPath
+            });
+            MessageBox.Show(
+                $"Failed to apply host settings.\r\n\r\n{exception.Message}",
+                Text,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
         }
     }
 
@@ -440,6 +514,7 @@ internal sealed class MainForm : Form
     {
         startButton.Enabled = !changingRuntimeState && snapshot.Readiness.State is HostReadinessState.Stopped or HostReadinessState.Faulted;
         stopButton.Enabled = !changingRuntimeState && snapshot.Readiness.State is HostReadinessState.Starting or HostReadinessState.Ready or HostReadinessState.Streaming;
+        settingsButton.Enabled = !changingRuntimeState;
         copyButton.Enabled = !changingRuntimeState;
     }
 
@@ -560,4 +635,76 @@ internal sealed class MainForm : Form
         value?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "n/a";
 
     private static string FormatPercent(double value) => $"{Math.Round(Math.Max(0, Math.Min(1, value)) * 100):0}%";
+
+    private WindowsHostRuntime CreateRuntime(HostRuntimeConfig effectiveConfig)
+    {
+        ConfigureLogger(effectiveConfig);
+        return new WindowsHostRuntime(logger, effectiveConfig);
+    }
+
+    private void ConfigureLogger(HostRuntimeConfig effectiveConfig)
+    {
+        logger.MinimumLevel = StructuredLogLevelParser.Parse(effectiveConfig.LogLevel);
+        logger.OutputFormat = StructuredConsoleLogFormatParser.Parse(effectiveConfig.LogFormat);
+    }
+
+    private async Task ApplyPendingEffectiveConfigIfPossibleAsync()
+    {
+        if (pendingEffectiveConfig is null ||
+            runtime.Snapshot.Readiness.State is not (HostReadinessState.Stopped or HostReadinessState.Faulted))
+        {
+            return;
+        }
+
+        var effectiveConfig = pendingEffectiveConfig;
+        pendingEffectiveConfig = null;
+        await ReplaceRuntimeAsync(effectiveConfig, startAfterReplace: false);
+    }
+
+    private async Task RestartRuntimeAsync(HostRuntimeConfig effectiveConfig)
+    {
+        changingRuntimeState = true;
+        UpdateButtons(runtime.Snapshot);
+
+        try
+        {
+            await ReplaceRuntimeAsync(effectiveConfig, startAfterReplace: true);
+        }
+        finally
+        {
+            changingRuntimeState = false;
+            UpdateButtons(runtime.Snapshot);
+        }
+    }
+
+    private async Task ReplaceRuntimeAsync(HostRuntimeConfig effectiveConfig, bool startAfterReplace)
+    {
+        ArgumentNullException.ThrowIfNull(effectiveConfig);
+
+        var previousRuntime = runtime;
+        previousRuntime.SnapshotChanged -= OnSnapshotChanged;
+
+        try
+        {
+            if (previousRuntime.Snapshot.Readiness.State is HostReadinessState.Starting or HostReadinessState.Ready or HostReadinessState.Streaming)
+            {
+                await previousRuntime.StopAsync();
+            }
+        }
+        finally
+        {
+            await previousRuntime.DisposeAsync();
+        }
+
+        runtime = CreateRuntime(effectiveConfig);
+        pendingEffectiveConfig = null;
+        runtime.SnapshotChanged += OnSnapshotChanged;
+        QueueSnapshot(runtime.Snapshot);
+        SafeFlushPendingSnapshot();
+
+        if (startAfterReplace)
+        {
+            await runtime.StartAsync();
+        }
+    }
 }
