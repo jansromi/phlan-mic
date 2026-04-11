@@ -234,6 +234,52 @@ public sealed class AudioStreamPipelineTests
         Assert.Equal(1, pipeline.GetRobustnessSnapshot().LateFramesDropped);
     }
 
+    [Fact]
+    public void WriteReanchorsToLiveEdgeAfterRepeatedConcealmentWhenBufferHasRunDry()
+    {
+        var format = AudioFormat.CreateMvpDefault();
+        var timeProvider = new ManualTimeProvider(new DateTimeOffset(2026, 04, 05, 0, 0, 0, TimeSpan.Zero));
+        var pipeline = CreatePipeline(
+            format,
+            maxBufferedFrames: 6,
+            startupPrebufferFrames: 2,
+            targetBufferedFrames: 2,
+            missingFrameGraceMs: 20,
+            timeProvider: timeProvider);
+
+        pipeline.Write(CreateFrame(format, 1));
+        pipeline.Write(CreateFrame(format, 2));
+
+        Assert.True(pipeline.TryRead(out var first, allowConcealment: true));
+        Assert.Equal(1, first!.SequenceNumber);
+
+        timeProvider.Advance(format.FrameDuration);
+        Assert.True(pipeline.TryRead(out var second, allowConcealment: true));
+        Assert.Equal(2, second!.SequenceNumber);
+
+        timeProvider.Advance(TimeSpan.FromMilliseconds(40));
+        Assert.True(pipeline.TryRead(out var concealedThird, allowConcealment: true));
+        Assert.Equal(3, concealedThird!.SequenceNumber);
+
+        timeProvider.Advance(TimeSpan.FromMilliseconds(40));
+        Assert.True(pipeline.TryRead(out var concealedFourth, allowConcealment: true));
+        Assert.Equal(4, concealedFourth!.SequenceNumber);
+
+        Assert.Equal(AudioEnqueueStatus.Accepted, pipeline.Write(CreateFrame(format, 3)).Status);
+        Assert.False(pipeline.TryRead(out _, allowConcealment: true));
+
+        Assert.Equal(AudioEnqueueStatus.Accepted, pipeline.Write(CreateFrame(format, 4)).Status);
+        Assert.True(pipeline.TryRead(out var recoveredThird, allowConcealment: true));
+        Assert.Equal(3, recoveredThird!.SequenceNumber);
+        Assert.True(pipeline.TryRead(out var recoveredFourth, allowConcealment: true));
+        Assert.Equal(4, recoveredFourth!.SequenceNumber);
+
+        var snapshot = pipeline.GetRobustnessSnapshot();
+        Assert.Equal(0, snapshot.LateFramesDropped);
+        Assert.Equal(2, snapshot.MissingFramesDetected);
+        Assert.Equal(StreamRobustnessState.Streaming, snapshot.State);
+    }
+
     private static AudioFrame CreateFrame(AudioFormat format, int sequenceNumber)
     {
         var payload = new byte[format.BytesPerFrame];

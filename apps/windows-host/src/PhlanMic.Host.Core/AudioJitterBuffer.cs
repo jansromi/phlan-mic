@@ -101,11 +101,18 @@ public sealed class AudioJitterBuffer
 
             if (expectedNextSequence is long expected && frame.SequenceNumber < expected)
             {
-                lateFramesArrived++;
-                lateFramesDropped++;
-                rejectedFrames++;
-                state = StreamRobustnessState.Degraded;
-                return new AudioEnqueueResult(AudioEnqueueStatus.RejectedLateFrame, bufferedFrames.Count);
+                if (ShouldResynchronizeToLiveEdge(frame.SequenceNumber))
+                {
+                    ResetSequenceStateLocked();
+                }
+                else
+                {
+                    lateFramesArrived++;
+                    lateFramesDropped++;
+                    rejectedFrames++;
+                    state = StreamRobustnessState.Degraded;
+                    return new AudioEnqueueResult(AudioEnqueueStatus.RejectedLateFrame, bufferedFrames.Count);
+                }
             }
 
             if (highestReceivedSequence is long highest && frame.SequenceNumber < highest)
@@ -247,12 +254,7 @@ public sealed class AudioJitterBuffer
     {
         lock (gate)
         {
-            bufferedFrames.Clear();
-            expectedNextSequence = null;
-            highestReceivedSequence = null;
-            activeGapEndSequenceExclusive = null;
-            nextPlayoutDueAtUtc = null;
-            state = StreamRobustnessState.Buffering;
+            ResetSequenceStateLocked();
         }
     }
 
@@ -279,6 +281,22 @@ public sealed class AudioJitterBuffer
         nextPlayoutDueAtUtc = nextPlayoutDueAtUtc is null
             ? now + expectedFormat.FrameDuration
             : nextPlayoutDueAtUtc.Value + expectedFormat.FrameDuration;
+    }
+
+    private bool ShouldResynchronizeToLiveEdge(long incomingSequenceNumber) =>
+        bufferedFrames.Count == 0 &&
+        state is StreamRobustnessState.Buffering or StreamRobustnessState.Degraded &&
+        highestReceivedSequence is long highest &&
+        incomingSequenceNumber > highest;
+
+    private void ResetSequenceStateLocked()
+    {
+        bufferedFrames.Clear();
+        expectedNextSequence = null;
+        highestReceivedSequence = null;
+        activeGapEndSequenceExclusive = null;
+        nextPlayoutDueAtUtc = null;
+        state = StreamRobustnessState.Buffering;
     }
 
     private AudioFrame CreateConcealedFrameLocked(DateTimeOffset now)
