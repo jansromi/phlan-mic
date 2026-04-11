@@ -202,10 +202,16 @@ public sealed class StructuredConsoleLogger
             {
                 $"state={FormatProperty(properties, "streamRobustnessState")}",
                 $"nextSeq={FormatProperty(properties, "expectedNextSequence")}",
+                $"highRecv={FormatProperty(properties, "highestReceivedSequence")}",
+                $"highBuf={FormatProperty(properties, "highestBufferedSequence")}",
                 $"gaps={FormatProperty(properties, "sequenceGapsObserved")}",
                 $"late={FormatProperty(properties, "lateFramesArrived")}/{FormatProperty(properties, "lateFramesDropped")}",
+                $"lastLate={FormatProperty(properties, "lastLateRejectedSequence")}",
                 $"missing={FormatProperty(properties, "missingFramesDetected")}",
                 $"silence={FormatProperty(properties, "hostSilenceFramesInserted")}",
+                $"lastConcealed={FormatProperty(properties, "lastConcealedSequence")}",
+                $"concealBurst={FormatProperty(properties, "consecutiveConcealedFrames")}",
+                $"recoveries={FormatProperty(properties, "liveEdgeRecoveryCount")}",
                 $"prebuffer={FormatProperty(properties, "currentPrebufferDepth")}"
             });
 
@@ -248,7 +254,10 @@ public sealed class StructuredConsoleLogger
                 $"accepted={FormatProperty(properties, "acceptedFrames")}",
                 $"rejected={FormatProperty(properties, "rejectedFrames")}",
                 $"dropped={FormatProperty(properties, "droppedFrames")}",
-                $"buffered={FormatProperty(properties, "bufferedFrames")}"
+                $"buffered={FormatProperty(properties, "bufferedFrames")}",
+                $"late={FormatProperty(properties, "lateFramesDropped")}",
+                $"missing={FormatProperty(properties, "missingFramesDetected")}",
+                $"recoveries={FormatProperty(properties, "liveEdgeRecoveryCount")}"
             });
 
         var output = string.Join(

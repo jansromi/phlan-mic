@@ -16,11 +16,17 @@ public sealed class AudioJitterBuffer
     private long lateFramesDropped;
     private long missingFramesDetected;
     private long silenceFramesInserted;
+    private long liveEdgeRecoveryCount;
     private int largestObservedGap;
+    private int consecutiveConcealedFrames;
     private long? expectedNextSequence;
     private long? highestReceivedSequence;
     private long? activeGapEndSequenceExclusive;
     private DateTimeOffset? nextPlayoutDueAtUtc;
+    private long? lastLateRejectedSequence;
+    private long? lastConcealedSequence;
+    private long? lastRecoveryPreviousExpectedSequence;
+    private long? lastRecoveryIncomingSequence;
     private StreamRobustnessState state = StreamRobustnessState.Buffering;
 
     public AudioJitterBuffer(
@@ -103,12 +109,16 @@ public sealed class AudioJitterBuffer
             {
                 if (ShouldResynchronizeToLiveEdge(frame.SequenceNumber))
                 {
+                    liveEdgeRecoveryCount++;
+                    lastRecoveryPreviousExpectedSequence = expected;
+                    lastRecoveryIncomingSequence = frame.SequenceNumber;
                     ResetSequenceStateLocked();
                 }
                 else
                 {
                     lateFramesArrived++;
                     lateFramesDropped++;
+                    lastLateRejectedSequence = frame.SequenceNumber;
                     rejectedFrames++;
                     state = StreamRobustnessState.Degraded;
                     return new AudioEnqueueResult(AudioEnqueueStatus.RejectedLateFrame, bufferedFrames.Count);
@@ -183,6 +193,7 @@ public sealed class AudioJitterBuffer
                 bufferedFrames.Remove(expectedNextSequence.Value);
                 expectedNextSequence++;
                 AdvancePlayoutScheduleLocked(now);
+                consecutiveConcealedFrames = 0;
 
                 if (activeGapEndSequenceExclusive is not null &&
                     expectedNextSequence >= activeGapEndSequenceExclusive)
@@ -235,11 +246,18 @@ public sealed class AudioJitterBuffer
                 state,
                 expectedNextSequence,
                 highestReceivedSequence,
+                bufferedFrames.Count > 0 ? bufferedFrames.Last().Key : null,
                 sequenceGapsObserved,
                 lateFramesArrived,
                 lateFramesDropped,
+                lastLateRejectedSequence,
                 missingFramesDetected,
                 silenceFramesInserted,
+                lastConcealedSequence,
+                consecutiveConcealedFrames,
+                liveEdgeRecoveryCount,
+                lastRecoveryPreviousExpectedSequence,
+                lastRecoveryIncomingSequence,
                 bufferedFrames.Count,
                 largestObservedGap,
                 robustnessConfig.StartupPrebufferFrames,
@@ -296,6 +314,7 @@ public sealed class AudioJitterBuffer
         highestReceivedSequence = null;
         activeGapEndSequenceExclusive = null;
         nextPlayoutDueAtUtc = null;
+        consecutiveConcealedFrames = 0;
         state = StreamRobustnessState.Buffering;
     }
 
@@ -311,6 +330,8 @@ public sealed class AudioJitterBuffer
         AdvancePlayoutScheduleLocked(now);
         missingFramesDetected++;
         silenceFramesInserted++;
+        lastConcealedSequence = concealedFrame.SequenceNumber;
+        consecutiveConcealedFrames++;
         state = StreamRobustnessState.Degraded;
         return concealedFrame;
     }

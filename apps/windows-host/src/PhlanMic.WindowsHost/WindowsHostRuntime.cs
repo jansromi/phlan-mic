@@ -460,6 +460,9 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
         long lastDroppedFrames = 0;
         long lastRejectedFrames = 0;
         long lastUnderrunCount = 0;
+        long lastLateFramesDropped = 0;
+        long lastMissingFramesDetected = 0;
+        long lastLiveEdgeRecoveryCount = 0;
         var nextStatsLogAtUtc = DateTimeOffset.UtcNow;
 
         try
@@ -492,11 +495,18 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                         ["streamRobustnessState"] = robustness.State.ToString(),
                         ["expectedNextSequence"] = robustness.ExpectedNextSequence,
                         ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["highestBufferedSequence"] = robustness.HighestBufferedSequence,
                         ["sequenceGapsObserved"] = robustness.SequenceGapsObserved,
                         ["lateFramesArrived"] = robustness.LateFramesArrived,
                         ["lateFramesDropped"] = robustness.LateFramesDropped,
+                        ["lastLateRejectedSequence"] = robustness.LastLateRejectedSequence,
                         ["missingFramesDetected"] = robustness.MissingFramesDetected,
                         ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted,
+                        ["lastConcealedSequence"] = robustness.LastConcealedSequence,
+                        ["consecutiveConcealedFrames"] = robustness.ConsecutiveConcealedFrames,
+                        ["liveEdgeRecoveryCount"] = robustness.LiveEdgeRecoveryCount,
+                        ["lastRecoveryPreviousExpectedSequence"] = robustness.LastRecoveryPreviousExpectedSequence,
+                        ["lastRecoveryIncomingSequence"] = robustness.LastRecoveryIncomingSequence,
                         ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,
                         ["largestObservedGap"] = robustness.LargestObservedGap,
                         ["startupPrebufferFrames"] = robustness.StartupPrebufferFrames,
@@ -539,10 +549,18 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                         ["state"] = robustness.State.ToString(),
                         ["bufferedFrames"] = stats.BufferedFrameCount,
                         ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                        ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["highestBufferedSequence"] = robustness.HighestBufferedSequence,
                         ["sequenceGapsObserved"] = robustness.SequenceGapsObserved,
                         ["lateFramesDropped"] = robustness.LateFramesDropped,
+                        ["lastLateRejectedSequence"] = robustness.LastLateRejectedSequence,
                         ["missingFramesDetected"] = robustness.MissingFramesDetected,
-                        ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted
+                        ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted,
+                        ["lastConcealedSequence"] = robustness.LastConcealedSequence,
+                        ["consecutiveConcealedFrames"] = robustness.ConsecutiveConcealedFrames,
+                        ["liveEdgeRecoveryCount"] = robustness.LiveEdgeRecoveryCount,
+                        ["lastRecoveryPreviousExpectedSequence"] = robustness.LastRecoveryPreviousExpectedSequence,
+                        ["lastRecoveryIncomingSequence"] = robustness.LastRecoveryIncomingSequence
                     };
 
                     if (robustness.State is StreamRobustnessState.Degraded)
@@ -564,7 +582,12 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                         ["droppedFrames"] = stats.DroppedFrames,
                         ["rejectedFrames"] = stats.RejectedFrames,
                         ["bufferedFrames"] = stats.BufferedFrameCount,
-                        ["bufferCapacity"] = config.Buffer.MaxBufferedFrames
+                        ["bufferCapacity"] = config.Buffer.MaxBufferedFrames,
+                        ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                        ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["highestBufferedSequence"] = robustness.HighestBufferedSequence,
+                        ["lastLateRejectedSequence"] = robustness.LastLateRejectedSequence,
+                        ["liveEdgeRecoveryCount"] = robustness.LiveEdgeRecoveryCount
                     });
                 }
 
@@ -575,13 +598,65 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                         ["underrunCount"] = outputSnapshot.UnderrunCount,
                         ["silenceFramesInserted"] = outputSnapshot.SilenceFramesInserted,
                         ["estimatedLatencyMs"] = outputSnapshot.EstimatedLatencyMs,
-                        ["glitchRatePerMinute"] = outputSnapshot.GlitchRatePerMinute
+                        ["glitchRatePerMinute"] = outputSnapshot.GlitchRatePerMinute,
+                        ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                        ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["lastConcealedSequence"] = robustness.LastConcealedSequence,
+                        ["consecutiveConcealedFrames"] = robustness.ConsecutiveConcealedFrames
+                    });
+                }
+
+                if (robustness.LateFramesDropped > lastLateFramesDropped)
+                {
+                    logger.Warning("stream_late_frames_rejected", "Host rejected frames because playout had already moved past them.", new Dictionary<string, object?>
+                    {
+                        ["lateFramesDropped"] = robustness.LateFramesDropped,
+                        ["lateFramesDroppedDelta"] = robustness.LateFramesDropped - lastLateFramesDropped,
+                        ["lateFramesArrived"] = robustness.LateFramesArrived,
+                        ["lastLateRejectedSequence"] = robustness.LastLateRejectedSequence,
+                        ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                        ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["highestBufferedSequence"] = robustness.HighestBufferedSequence,
+                        ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth
+                    });
+                }
+
+                if (robustness.MissingFramesDetected > lastMissingFramesDetected)
+                {
+                    logger.Warning("stream_concealment_inserted", "Host inserted concealed silence to keep playout moving.", new Dictionary<string, object?>
+                    {
+                        ["missingFramesDetected"] = robustness.MissingFramesDetected,
+                        ["missingFramesDelta"] = robustness.MissingFramesDetected - lastMissingFramesDetected,
+                        ["hostSilenceFramesInserted"] = robustness.SilenceFramesInserted,
+                        ["lastConcealedSequence"] = robustness.LastConcealedSequence,
+                        ["consecutiveConcealedFrames"] = robustness.ConsecutiveConcealedFrames,
+                        ["expectedNextSequence"] = robustness.ExpectedNextSequence,
+                        ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["highestBufferedSequence"] = robustness.HighestBufferedSequence,
+                        ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth
+                    });
+                }
+
+                if (robustness.LiveEdgeRecoveryCount > lastLiveEdgeRecoveryCount)
+                {
+                    logger.Warning("stream_live_edge_reanchored", "Host re-anchored playout to a newer live edge after falling behind.", new Dictionary<string, object?>
+                    {
+                        ["liveEdgeRecoveryCount"] = robustness.LiveEdgeRecoveryCount,
+                        ["recoveryDelta"] = robustness.LiveEdgeRecoveryCount - lastLiveEdgeRecoveryCount,
+                        ["lastRecoveryPreviousExpectedSequence"] = robustness.LastRecoveryPreviousExpectedSequence,
+                        ["lastRecoveryIncomingSequence"] = robustness.LastRecoveryIncomingSequence,
+                        ["highestReceivedSequence"] = robustness.HighestReceivedSequence,
+                        ["highestBufferedSequence"] = robustness.HighestBufferedSequence,
+                        ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth
                     });
                 }
 
                 lastDroppedFrames = stats.DroppedFrames;
                 lastRejectedFrames = stats.RejectedFrames;
                 lastUnderrunCount = outputSnapshot.UnderrunCount;
+                lastLateFramesDropped = robustness.LateFramesDropped;
+                lastMissingFramesDetected = robustness.MissingFramesDetected;
+                lastLiveEdgeRecoveryCount = robustness.LiveEdgeRecoveryCount;
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -937,11 +1012,18 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             ["streamRobustnessState"] = inputStats.Robustness.State.ToString(),
             ["expectedNextSequence"] = inputStats.Robustness.ExpectedNextSequence,
             ["highestReceivedSequence"] = inputStats.Robustness.HighestReceivedSequence,
+            ["highestBufferedSequence"] = inputStats.Robustness.HighestBufferedSequence,
             ["sequenceGapsObserved"] = inputStats.Robustness.SequenceGapsObserved,
             ["lateFramesArrived"] = inputStats.Robustness.LateFramesArrived,
             ["lateFramesDropped"] = inputStats.Robustness.LateFramesDropped,
+            ["lastLateRejectedSequence"] = inputStats.Robustness.LastLateRejectedSequence,
             ["missingFramesDetected"] = inputStats.Robustness.MissingFramesDetected,
             ["hostSilenceFramesInserted"] = inputStats.Robustness.SilenceFramesInserted,
+            ["lastConcealedSequence"] = inputStats.Robustness.LastConcealedSequence,
+            ["consecutiveConcealedFrames"] = inputStats.Robustness.ConsecutiveConcealedFrames,
+            ["liveEdgeRecoveryCount"] = inputStats.Robustness.LiveEdgeRecoveryCount,
+            ["lastRecoveryPreviousExpectedSequence"] = inputStats.Robustness.LastRecoveryPreviousExpectedSequence,
+            ["lastRecoveryIncomingSequence"] = inputStats.Robustness.LastRecoveryIncomingSequence,
             ["currentPrebufferDepth"] = inputStats.Robustness.CurrentPrebufferDepth,
             ["largestObservedGap"] = inputStats.Robustness.LargestObservedGap,
             ["startupPrebufferFrames"] = inputStats.Robustness.StartupPrebufferFrames,
@@ -1001,11 +1083,18 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             StreamRobustnessState.Buffering,
             null,
             null,
+            null,
             0,
             0,
             0,
+            null,
             0,
             0,
+            null,
+            0,
+            0,
+            null,
+            null,
             0,
             0,
             config.Robustness.StartupPrebufferFrames,

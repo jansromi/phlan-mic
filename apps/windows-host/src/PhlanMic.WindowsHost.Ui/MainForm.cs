@@ -563,7 +563,11 @@ internal sealed class MainForm : Form
             .AppendLine($"Accepted / Rejected / Dropped: {stats.AcceptedFrames} / {stats.RejectedFrames} / {stats.DroppedFrames}")
             .AppendLine($"Buffered Frames: {stats.BufferedFrameCount}")
             .AppendLine($"Robustness State: {robustness.State}")
+            .AppendLine($"Expected / Highest Received / Highest Buffered: {robustness.ExpectedNextSequence?.ToString() ?? "n/a"} / {robustness.HighestReceivedSequence?.ToString() ?? "n/a"} / {robustness.HighestBufferedSequence?.ToString() ?? "n/a"}")
             .AppendLine($"Missing / Late Dropped / Silence: {robustness.MissingFramesDetected} / {robustness.LateFramesDropped} / {robustness.SilenceFramesInserted}")
+            .AppendLine($"Last Late Rejected / Last Concealed: {robustness.LastLateRejectedSequence?.ToString() ?? "n/a"} / {robustness.LastConcealedSequence?.ToString() ?? "n/a"}")
+            .AppendLine($"Concealment Burst / Live-Edge Recoveries: {robustness.ConsecutiveConcealedFrames} / {robustness.LiveEdgeRecoveryCount}")
+            .AppendLine($"Last Recovery From / To: {robustness.LastRecoveryPreviousExpectedSequence?.ToString() ?? "n/a"} / {robustness.LastRecoveryIncomingSequence?.ToString() ?? "n/a"}")
             .AppendLine($"Estimated Buffer Latency Ms: {robustness.EstimatedBufferLatencyMs}")
             .AppendLine($"Output Submitted / Completed: {snapshot.AudioOutput.SubmittedFrames} / {snapshot.AudioOutput.CompletedFrames}")
             .AppendLine($"Last Output Frame: {FormatTimestamp(snapshot.AudioOutput.LastCompletedAtUtc)}");
