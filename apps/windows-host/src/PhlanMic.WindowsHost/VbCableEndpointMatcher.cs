@@ -29,6 +29,18 @@ internal sealed record VbCableEndpointMatchResult(
 
 internal static class VbCableEndpointMatcher
 {
+    internal static IReadOnlyList<AudioEndpointInfo> GetRenderCandidates(IReadOnlyList<AudioEndpointInfo> endpoints) =>
+        endpoints
+            .Where(IsVbCableRenderCandidate)
+            .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+    internal static IReadOnlyList<AudioEndpointInfo> GetCaptureCandidates(IReadOnlyList<AudioEndpointInfo> endpoints) =>
+        endpoints
+            .Where(IsVbCableCaptureCandidate)
+            .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
     public static VbCableEndpointMatchResult Match(
         IReadOnlyList<AudioEndpointInfo> endpoints,
         string? preferredRenderEndpointId = null)
@@ -43,14 +55,8 @@ internal static class VbCableEndpointMatcher
             .Where(endpoint => endpoint.Flow is AudioEndpointFlow.Capture)
             .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
             .ToArray();
-        var renderCandidates = endpoints
-            .Where(IsVbCableRenderCandidate)
-            .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        var captureCandidates = endpoints
-            .Where(IsVbCableCaptureCandidate)
-            .OrderBy(endpoint => endpoint.FriendlyName, StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        var renderCandidates = GetRenderCandidates(endpoints).ToArray();
+        var captureCandidates = GetCaptureCandidates(endpoints).ToArray();
         var usablePairs = BuildUsablePairs(renderCandidates, captureCandidates);
         var activeRenderEndpoints = allRenderEndpoints.Where(endpoint => endpoint.IsActive).ToArray();
         var activeCaptureEndpoints = allCaptureEndpoints.Where(endpoint => endpoint.IsActive).ToArray();

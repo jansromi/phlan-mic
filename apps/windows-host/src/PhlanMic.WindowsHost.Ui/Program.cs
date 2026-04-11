@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using PhlanMic.Host.Core;
 using PhlanMic.WindowsHost;
 
 namespace PhlanMic.WindowsHost.Ui;
@@ -18,8 +19,8 @@ internal static class Program
 
         try
         {
-            var loader = new HostConfigLoader();
-            var config = loader.Load(configPath);
+            var configStore = new HostConfigStore();
+            var config = configStore.LoadEffective(configPath);
             logger.MinimumLevel = StructuredLogLevelParser.Parse(config.LogLevel);
             logger.OutputFormat = StructuredConsoleLogFormatParser.Parse(config.LogFormat);
             logger.Info("ui_launch", "Launching the Windows host UI.", new Dictionary<string, object?>
@@ -48,7 +49,7 @@ internal static class Program
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm(new WindowsHostRuntime(logger, config), logger, configPath));
+            Application.Run(new MainForm(configStore, new HostOutputDeviceCatalog(), config, logger, configPath));
             logger.Info("ui_exit", "Windows host UI exited normally.", new Dictionary<string, object?>
             {
                 ["configPath"] = configPath

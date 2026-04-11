@@ -6,7 +6,7 @@ public sealed record OutputConfig
     public const string DebugDrainMode = "DebugDrain";
     public const string VbCableMode = "VbCable";
 
-    public string Mode { get; init; } = WaveOutMode;
+    public string Mode { get; init; } = VbCableMode;
 
     public int DeviceId { get; init; } = -1;
 
