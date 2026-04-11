@@ -116,8 +116,54 @@ enum SessionStopReason: String, Sendable, Equatable {
     }
 }
 
+enum BackgroundContinuationPolicy: String, Sendable, Equatable {
+    case foregroundOnly
+    case activeSessionOnly
+
+    var debugLabel: String {
+        switch self {
+        case .foregroundOnly:
+            "Foreground Only"
+        case .activeSessionOnly:
+            "Active Session Only"
+        }
+    }
+
+    var defaultDetail: String {
+        switch self {
+        case .foregroundOnly:
+            "Foreground start is required and live audio stops when the app is no longer visible."
+        case .activeSessionOnly:
+            "Foreground start is required. A live session may continue when the app is locked or backgrounded."
+        }
+    }
+}
+
 @MainActor
 final class AppModel: ObservableObject {
+    private enum TransportTerminalCause: Sendable, Equatable {
+        case none
+        case userStop
+        case systemStop
+        case timeout
+        case failure
+
+        var debugLabel: String {
+            switch self {
+            case .none:
+                "None"
+            case .userStop:
+                "User Stop"
+            case .systemStop:
+                "System Stop"
+            case .timeout:
+                "Timeout"
+            case .failure:
+                "Failure"
+            }
+        }
+    }
+
     private final class InputLevelUpdateBuffer: @unchecked Sendable {
         private let lock = NSLock()
         private let updateEveryCallbacks: Int
@@ -315,6 +361,7 @@ final class AppModel: ObservableObject {
         var requestMicrophonePermission: () async -> MicrophonePermissionState
         var startCapture: (
             MVPAudioFormat,
+            CaptureAudioSessionProfile,
             @escaping @Sendable (AudioInputLevel) -> Void,
             @escaping @Sendable (CapturedAudioFrame) -> Void,
             @escaping @Sendable (Error) -> Void,
@@ -339,9 +386,10 @@ final class AppModel: ObservableObject {
                 requestMicrophonePermission: {
                     await permissionClient.requestPermission()
                 },
-                startCapture: { format, onInputLevel, onFrame, onFailure, onSessionEvent in
+                startCapture: { format, profile, onInputLevel, onFrame, onFailure, onSessionEvent in
                     try captureClient.startCapture(
                         format: format,
+                        profile: profile,
                         onInputLevel: onInputLevel,
                         onFrame: onFrame,
                         onFailure: onFailure,
@@ -420,6 +468,15 @@ final class AppModel: ObservableObject {
     @Published var lastRouteChange: CaptureRouteChange?
     @Published var lastSystemStopReason: SessionStopReason?
     @Published var lastSystemStopDetail = "No lifecycle stop recorded."
+    @Published var backgroundContinuationPolicy = BackgroundContinuationPolicy.activeSessionOnly {
+        didSet {
+            if !isStreamingInBackground, lastBackgroundTransitionTime == nil {
+                backgroundStatusDetail = backgroundContinuationPolicy.defaultDetail
+            }
+        }
+    }
+    @Published var isStreamingInBackground = false
+    @Published var backgroundStatusDetail = BackgroundContinuationPolicy.activeSessionOnly.defaultDetail
 
     private let dependencies: Dependencies
     private var currentTransportClient: AudioTransportClient?
@@ -427,6 +484,9 @@ final class AppModel: ObservableObject {
     private var transportAttemptCount = 0
     private var currentSceneState = AppSceneState.active
     private var pendingSystemStop: PendingSystemStop?
+    private var captureAudioSessionProfile = CaptureAudioSessionProfile.recordMeasurement
+    private var lastBackgroundTransitionTime: Date?
+    private var lastTransportTerminalCause = TransportTerminalCause.none
 
     private struct PendingSystemStop {
         let reason: SessionStopReason
@@ -494,6 +554,10 @@ final class AppModel: ObservableObject {
 
     var primaryStatusDetail: String {
         if transportStatus == .streaming {
+            if shouldSurfaceBackgroundStatus {
+                return backgroundStatusDetail
+            }
+
             return "Streaming voice audio to \(hostConfiguration.displayEndpoint). Tap the mic again to stop."
         }
 
@@ -570,6 +634,10 @@ final class AppModel: ObservableObject {
         }
 
         if transportStatus.isActive {
+            if shouldSurfaceBackgroundStatus, transportStatus == .streaming {
+                return backgroundStatusDetail
+            }
+
             switch transportStatus {
             case .connecting:
                 return activeTransportStatusDetail(fallback: "Opening the transport connection to the Windows host.")
@@ -675,6 +743,10 @@ final class AppModel: ObservableObject {
             return lastTransportError
         }
 
+        if shouldSurfaceBackgroundStatus {
+            return backgroundStatusDetail
+        }
+
         if transportStatus.isActive && transportStatus != .streaming {
             return transportDetail
         }
@@ -753,18 +825,21 @@ final class AppModel: ObservableObject {
 
         switch nextSceneState {
         case .active:
+            handleSceneBecameActive()
             return
         case .inactive:
-            stopActiveSession(
-                reason: .sceneBecameInactive,
-                detail: "The session stopped because the app became inactive. Bring the app back to the foreground and start again.",
-                logMessage: "Scene became inactive while audio was active."
+            handleSceneDeactivation(
+                nextSceneState,
+                stopReason: .sceneBecameInactive,
+                stopDetail: "The session stopped because the app became inactive. Bring the app back to the foreground and start again.",
+                stopLogMessage: "Scene became inactive while audio was active."
             )
         case .background:
-            stopActiveSession(
-                reason: .sceneEnteredBackground,
-                detail: "The session stopped because the app entered the background. Reopen the app and start again.",
-                logMessage: "Scene entered the background while audio was active."
+            handleSceneDeactivation(
+                nextSceneState,
+                stopReason: .sceneEnteredBackground,
+                stopDetail: "The session stopped because the app entered the background. Reopen the app and start again.",
+                stopLogMessage: "Scene entered the background while audio was active."
             )
         }
     }
@@ -889,6 +964,8 @@ final class AppModel: ObservableObject {
         }
 
         clearLifecycleStopPresentation()
+        clearBackgroundContinuationStatus()
+        lastTransportTerminalCause = .none
         captureOwnedByTransport = false
         await startCapturePipeline(streamToTransport: false)
     }
@@ -908,6 +985,8 @@ final class AppModel: ObservableObject {
 
         presentedSheet = nil
         clearLifecycleStopPresentation()
+        clearBackgroundContinuationStatus()
+        lastTransportTerminalCause = .none
 
         if captureStatus == .starting || captureStatus == .capturing {
             stopCapture(
@@ -958,6 +1037,8 @@ final class AppModel: ObservableObject {
         }
 
         clearLifecycleStopPresentation()
+        clearBackgroundContinuationStatus()
+        lastTransportTerminalCause = .userStop
         transportStatus = .stopping
         transportDetail = stoppingTransportDetail
         log("Stopping the \(hostConfiguration.transportMode.label) session.")
@@ -1002,6 +1083,18 @@ final class AppModel: ObservableObject {
         transportStatus.isActive
     }
 
+    var lastBackgroundTransitionSummary: String {
+        guard let lastBackgroundTransitionTime else {
+            return "None"
+        }
+
+        return lastBackgroundTransitionTime.formatted(date: .omitted, time: .standard)
+    }
+
+    var lastTransportTerminalCauseSummary: String {
+        lastTransportTerminalCause.debugLabel
+    }
+
     private var sessionHealthConnectionValue: String {
         switch transportStatus {
         case .streaming:
@@ -1042,6 +1135,10 @@ final class AppModel: ObservableObject {
     private var sessionHealthConnectionDetail: String {
         switch transportStatus {
         case .streaming:
+            if shouldSurfaceBackgroundStatus {
+                return backgroundStatusDetail
+            }
+
             return "The session is live and microphone audio is reaching \(hostConfiguration.displayEndpoint)."
         case .connecting:
             return "The app is opening a connection to \(hostConfiguration.displayEndpoint)."
@@ -1232,6 +1329,7 @@ final class AppModel: ObservableObject {
             let transportSendProgressBuffer = TransportSendProgressBuffer(flushEveryFrames: 25)
             let startup = try dependencies.startCapture(
                 .defaultVoice,
+                captureAudioSessionProfile,
                 { inputLevel in
                     guard let levelUpdate = inputLevelUpdateBuffer.record(inputLevel) else {
                         return
@@ -1343,6 +1441,7 @@ final class AppModel: ObservableObject {
 
         if captureOwnedByTransport {
             captureOwnedByTransport = false
+            clearBackgroundContinuationStatus()
             handleTransportFailure(
                 detail: "Microphone capture failed while streaming: \(error.localizedDescription)",
                 logMessage: "Streaming stopped because microphone capture failed: \(error.localizedDescription)"
@@ -1409,10 +1508,12 @@ final class AppModel: ObservableObject {
             if transportStatus == .stopping {
                 transportStatus = .disconnected
                 transportDetail = detail
+                clearBackgroundContinuationStatus()
                 log(detail)
             } else if transportStatus != .error {
                 transportStatus = .disconnected
                 transportDetail = detail
+                clearBackgroundContinuationStatus()
             }
         }
     }
@@ -1470,19 +1571,21 @@ final class AppModel: ObservableObject {
             return
         }
 
+        let resolvedDetail = resolvedTransportFailureDetail(from: detail)
+
         if captureStatus == .starting || captureStatus == .capturing {
             dependencies.stopCapture()
-            latestInputLevel = .silence
-            captureSessionSummary = "Capture stopped."
-            syncCaptureAvailability(reason: "Transport is idle. Ready to capture again.")
+            resetCaptureAfterStop(reason: "Transport is idle. Ready to capture again.")
         }
 
         captureOwnedByTransport = false
         let transportClient = currentTransportClient
         currentTransportClient = nil
+        lastTransportTerminalCause = isTransportTimeout(detail) ? .timeout : .failure
         transportStatus = .error
-        transportDetail = detail
-        lastTransportError = detail
+        transportDetail = resolvedDetail
+        lastTransportError = resolvedDetail
+        updateBackgroundContinuationStatusForTerminalFailure(detail: resolvedDetail)
         log(logMessage)
         transportClient?.disconnect()
     }
@@ -1493,10 +1596,8 @@ final class AppModel: ObservableObject {
         }
 
         dependencies.stopCapture()
-        latestInputLevel = .silence
-        captureSessionSummary = "Capture stopped."
-        captureOwnedByTransport = false
-        syncCaptureAvailability(reason: reason)
+        clearBackgroundContinuationStatus()
+        resetCaptureAfterStop(reason: reason)
 
         if let logMessage {
             log(logMessage)
@@ -1515,14 +1616,13 @@ final class AppModel: ObservableObject {
         pendingSystemStop = PendingSystemStop(reason: reason, detail: detail)
         lastSystemStopReason = reason
         lastSystemStopDetail = detail
+        lastTransportTerminalCause = .systemStop
+        clearBackgroundContinuationStatus()
         log(logMessage)
 
         if captureStatus == .starting || captureStatus == .capturing {
             dependencies.stopCapture()
-            latestInputLevel = .silence
-            captureSessionSummary = "Capture stopped."
-            captureOwnedByTransport = false
-            syncCaptureAvailability(reason: detail)
+            resetCaptureAfterStop(reason: detail)
         }
 
         if transportStatus.isActive {
@@ -1553,12 +1653,141 @@ final class AppModel: ObservableObject {
         lastSystemStopDetail = "No lifecycle stop recorded."
     }
 
+    private func clearBackgroundContinuationStatus() {
+        isStreamingInBackground = false
+        lastBackgroundTransitionTime = nil
+        backgroundStatusDetail = backgroundContinuationPolicy.defaultDetail
+    }
+
+    private func handleSceneBecameActive() {
+        guard backgroundContinuationPolicy == .activeSessionOnly else {
+            return
+        }
+
+        guard lastBackgroundTransitionTime != nil else {
+            return
+        }
+
+        let hadBackgroundStreaming = isStreamingInBackground
+        isStreamingInBackground = false
+
+        guard transportStatus.isActive || captureStatus == .capturing else {
+            return
+        }
+
+        if transportStatus == .streaming || (captureStatus == .capturing && !captureOwnedByTransport) {
+            backgroundStatusDetail = hadBackgroundStreaming
+                ? "The active session continued while the app was in the background and is still live."
+                : "The active session remained live through the last inactive transition."
+            log("Returned to the foreground with the active session still running.")
+        } else {
+            backgroundStatusDetail = backgroundContinuationPolicy.defaultDetail
+        }
+    }
+
+    private func handleSceneDeactivation(
+        _ nextSceneState: AppSceneState,
+        stopReason: SessionStopReason,
+        stopDetail: String,
+        stopLogMessage: String
+    ) {
+        if shouldContinueCurrentSessionInBackground {
+            lastBackgroundTransitionTime = Date()
+            isStreamingInBackground = transportStatus == .streaming
+            backgroundStatusDetail = backgroundContinuationDetail(for: nextSceneState)
+            log(backgroundContinuationLogMessage(for: nextSceneState))
+            return
+        }
+
+        stopActiveSession(reason: stopReason, detail: stopDetail, logMessage: stopLogMessage)
+    }
+
     private var shouldSurfaceLifecycleStop: Bool {
         lastSystemStopReason != nil && !transportStatus.isActive && transportStatus != .error
     }
 
+    private var shouldContinueCurrentSessionInBackground: Bool {
+        guard backgroundContinuationPolicy == .activeSessionOnly else {
+            return false
+        }
+
+        if transportStatus == .streaming {
+            return true
+        }
+
+        return !captureOwnedByTransport && captureStatus == .capturing
+    }
+
+    private var shouldSurfaceBackgroundStatus: Bool {
+        !backgroundStatusDetail.isEmpty && (isStreamingInBackground || lastBackgroundTransitionTime != nil)
+    }
+
     private var hasActiveAudioSession: Bool {
         transportStatus.isActive || captureStatus == .starting || captureStatus == .capturing
+    }
+
+    private func backgroundContinuationDetail(for sceneState: AppSceneState) -> String {
+        switch sceneState {
+        case .inactive:
+            if transportStatus == .streaming {
+                return "The live session is continuing while the app is inactive. If iOS suspends control traffic, the Windows host may time out."
+            }
+
+            return "The active capture session is continuing while the app is inactive."
+        case .background:
+            if transportStatus == .streaming {
+                return "The live session is continuing in the background under the active-session-only policy."
+            }
+
+            return "The active capture session is continuing in the background."
+        case .active:
+            return backgroundContinuationPolicy.defaultDetail
+        }
+    }
+
+    private func backgroundContinuationLogMessage(for sceneState: AppSceneState) -> String {
+        switch sceneState {
+        case .inactive:
+            return transportStatus == .streaming
+                ? "Allowed the live session to continue while the app became inactive."
+                : "Allowed the active capture session to continue while the app became inactive."
+        case .background:
+            return transportStatus == .streaming
+                ? "Allowed the live session to continue after the app entered the background."
+                : "Allowed the active capture session to continue after the app entered the background."
+        case .active:
+            return "The app returned to the foreground."
+        }
+    }
+
+    private func resolvedTransportFailureDetail(from detail: String) -> String {
+        guard isTransportTimeout(detail) else {
+            return detail
+        }
+
+        if currentSceneState == .background || currentSceneState == .inactive || lastBackgroundTransitionTime != nil {
+            return "The Windows host timed out waiting for background control activity. Bring the app back to the foreground and reconnect."
+        }
+
+        return "The Windows host timed out waiting for control activity. Start the session again."
+    }
+
+    private func updateBackgroundContinuationStatusForTerminalFailure(detail: String) {
+        if lastTransportTerminalCause == .timeout, currentSceneState != .active || lastBackgroundTransitionTime != nil {
+            isStreamingInBackground = false
+            backgroundStatusDetail = "Background continuation ended because the Windows host timed out waiting for control activity."
+            return
+        }
+
+        clearBackgroundContinuationStatus()
+
+        if lastTransportTerminalCause == .failure {
+            backgroundStatusDetail = detail
+        }
+    }
+
+    private func isTransportTimeout(_ detail: String) -> Bool {
+        detail.localizedCaseInsensitiveContains("timed out")
     }
 
     private func routeInvalidationDetail(for routeChange: CaptureRouteChange) -> String {
@@ -1588,6 +1817,14 @@ final class AppModel: ObservableObject {
             captureStatus = .unavailable
             captureDetail = "Live microphone capture requires a physical iPhone."
         }
+    }
+
+    private func resetCaptureAfterStop(reason: String) {
+        latestInputLevel = .silence
+        captureSessionSummary = "Capture stopped."
+        captureOwnedByTransport = false
+        captureStatus = microphonePermission == .granted ? .ready : .unavailable
+        syncCaptureAvailability(reason: reason)
     }
 }
 

@@ -44,8 +44,40 @@ struct AudioInputLevel: Equatable, Sendable {
     }
 }
 
+enum CaptureAudioSessionProfile: String, Sendable, Equatable {
+    case recordMeasurement
+    case playAndRecordMeasurement
+
+    var debugLabel: String {
+        switch self {
+        case .recordMeasurement:
+            "Record + Measurement"
+        case .playAndRecordMeasurement:
+            "PlayAndRecord + Measurement"
+        }
+    }
+
+    var sessionCategory: AVAudioSession.Category {
+        switch self {
+        case .recordMeasurement:
+            .record
+        case .playAndRecordMeasurement:
+            .playAndRecord
+        }
+    }
+
+    var sessionMode: AVAudioSession.Mode {
+        .measurement
+    }
+
+    var categoryOptions: AVAudioSession.CategoryOptions {
+        []
+    }
+}
+
 struct MicrophoneCaptureStartup: Equatable, Sendable {
     let requestedFormat: MVPAudioFormat
+    let audioSessionProfile: CaptureAudioSessionProfile
     let inputFormatSummary: String
     let outputFormatSummary: String
     let actualSampleRate: Double
@@ -57,7 +89,7 @@ struct MicrophoneCaptureStartup: Equatable, Sendable {
     var debugSummary: String {
         let roundedSampleRate = Int(actualSampleRate.rounded())
         let roundedBufferMilliseconds = Int((actualBufferDuration * 1_000).rounded())
-        return "Input \(inputFormatSummary). Output \(outputFormatSummary). Session \(roundedSampleRate) Hz / \(roundedBufferMilliseconds) ms buffer. Category \(sessionCategory), mode \(sessionMode), route \(routeSummary)."
+        return "Profile \(audioSessionProfile.debugLabel). Input \(inputFormatSummary). Output \(outputFormatSummary). Session \(roundedSampleRate) Hz / \(roundedBufferMilliseconds) ms buffer. Category \(sessionCategory), mode \(sessionMode), route \(routeSummary)."
     }
 }
 
@@ -124,6 +156,7 @@ final class MicrophoneCaptureClient {
 
     func startCapture(
         format: MVPAudioFormat = .defaultVoice,
+        profile: CaptureAudioSessionProfile = .recordMeasurement,
         onInputLevel: @escaping @Sendable (AudioInputLevel) -> Void,
         onFrame: @escaping @Sendable (CapturedAudioFrame) -> Void,
         onFailure: @escaping @Sendable (Error) -> Void,
@@ -140,7 +173,7 @@ final class MicrophoneCaptureClient {
         }
 
         do {
-            try configureSession(for: format)
+            try configureSession(for: format, profile: profile)
         } catch {
             throw MicrophoneCaptureError.sessionConfigurationFailed(error.localizedDescription)
         }
@@ -192,6 +225,7 @@ final class MicrophoneCaptureClient {
 
         return MicrophoneCaptureStartup(
             requestedFormat: format,
+            audioSessionProfile: profile,
             inputFormatSummary: inputFormat.debugSummary,
             outputFormatSummary: targetFormat.debugSummary,
             actualSampleRate: session.sampleRate,
@@ -209,12 +243,12 @@ final class MicrophoneCaptureClient {
         lock.unlock()
     }
 
-    private func configureSession(for format: MVPAudioFormat) throws {
+    private func configureSession(for format: MVPAudioFormat, profile: CaptureAudioSessionProfile) throws {
         let packetDurationSeconds = TimeInterval(format.packetDurationMilliseconds) / 1_000
 
         // We only uplink microphone audio. Voice chat processing can sound
         // aggressively gated or "choppy" even when transport is perfect.
-        try session.setCategory(.record, mode: .measurement, options: [])
+        try session.setCategory(profile.sessionCategory, mode: profile.sessionMode, options: profile.categoryOptions)
         try? session.setPreferredInputNumberOfChannels(format.channelCount)
         try session.setPreferredSampleRate(Double(format.sampleRate))
         try session.setPreferredIOBufferDuration(packetDurationSeconds)

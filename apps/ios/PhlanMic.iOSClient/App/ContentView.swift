@@ -623,9 +623,17 @@ private struct DebugView: View {
 
             Section("Lifecycle") {
                 KeyValueRow(label: "Scene", value: model.lastSceneState.debugLabel)
+                KeyValueRow(label: "Background Policy", value: model.backgroundContinuationPolicy.debugLabel)
+                KeyValueRow(label: "Background Active", value: model.isStreamingInBackground ? "Yes" : "No")
+                KeyValueRow(label: "Last Background", value: model.lastBackgroundTransitionSummary)
                 KeyValueRow(label: "Interruption", value: model.lastInterruptionState.debugLabel)
                 KeyValueRow(label: "Route Change", value: model.lastRouteChange?.debugLabel ?? "None")
                 KeyValueRow(label: "System Stop", value: model.lastSystemStopReason?.debugLabel ?? "None")
+                KeyValueRow(label: "Transport End", value: model.lastTransportTerminalCauseSummary)
+
+                Text(model.backgroundStatusDetail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
 
                 if model.lastSystemStopReason != nil {
                     Text(model.lastSystemStopDetail)
