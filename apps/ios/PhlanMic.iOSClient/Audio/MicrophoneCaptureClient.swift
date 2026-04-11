@@ -147,6 +147,7 @@ final class MicrophoneCaptureClient {
     private var targetFormat: AVAudioFormat?
     private var converter: AVAudioConverter?
     private var accumulator: PCMFrameAccumulator?
+    private var inputGain: Float = 1
     private var onInputLevel: (@Sendable (AudioInputLevel) -> Void)?
     private var onFrame: (@Sendable (CapturedAudioFrame) -> Void)?
     private var onFailure: (@Sendable (Error) -> Void)?
@@ -243,6 +244,12 @@ final class MicrophoneCaptureClient {
         lock.unlock()
     }
 
+    func setInputGain(_ gain: Float) {
+        lock.lock()
+        inputGain = max(0, gain)
+        lock.unlock()
+    }
+
     private func configureSession(for format: MVPAudioFormat, profile: CaptureAudioSessionProfile) throws {
         let packetDurationSeconds = TimeInterval(format.packetDurationMilliseconds) / 1_000
 
@@ -288,6 +295,7 @@ final class MicrophoneCaptureClient {
 
         do {
             let convertedBuffer = try Self.convertBuffer(buffer, using: converter, to: targetFormat)
+            Self.applyGain(inputGain, to: convertedBuffer)
             let inputLevel = Self.measureInputLevel(from: convertedBuffer)
             let payload = Self.extractPCMData(from: convertedBuffer)
             let frames = accumulator.append(payload)
@@ -360,6 +368,33 @@ final class MicrophoneCaptureClient {
         }
 
         return Data(bytes: rawData, count: Int(audioBuffer.mDataByteSize))
+    }
+
+    private static func applyGain(_ gain: Float, to buffer: AVAudioPCMBuffer) {
+        guard gain != 1 else {
+            return
+        }
+
+        let audioBuffer = buffer.audioBufferList.pointee.mBuffers
+
+        guard let rawData = audioBuffer.mData else {
+            return
+        }
+
+        let sampleCount = Int(audioBuffer.mDataByteSize) / MemoryLayout<Int16>.size
+        guard sampleCount > 0 else {
+            return
+        }
+
+        let samples = rawData.bindMemory(to: Int16.self, capacity: sampleCount)
+        let lowerBound = Float(Int16.min)
+        let upperBound = Float(Int16.max)
+
+        for index in 0 ..< sampleCount {
+            let scaledSample = (Float(samples[index]) * gain).rounded()
+            let clampedSample = max(lowerBound, min(upperBound, scaledSample))
+            samples[index] = Int16(clampedSample)
+        }
     }
 
     private static func measureInputLevel(from buffer: AVAudioPCMBuffer) -> AudioInputLevel {

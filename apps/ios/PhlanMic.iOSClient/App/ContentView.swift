@@ -56,7 +56,7 @@ struct ContentView: View {
                         }
                     }
 
-                    MeterPanel(inputLevel: model.latestInputLevel)
+                    InputMeterPanel(model: model)
                     SessionHealthPanel(model: model)
 
                     Spacer()
@@ -194,27 +194,75 @@ private struct PrimaryMicButton: View {
     }
 }
 
-private struct MeterPanel: View {
-    let inputLevel: AudioInputLevel
+private struct InputMeterPanel: View {
+    @ObservedObject var model: AppModel
+    @State private var isExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Input Meter")
-                .font(.headline)
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Input Meter")
+                            .font(.headline)
+
+                        Text(isExpanded ? "Average, peak, and capture gain." : "Tap to expand gain and detailed meters.")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
 
             LevelMeterRow(
                 label: "Average",
-                value: inputLevel.averageLevel,
-                percentage: inputLevel.averagePercentage,
-                decibels: inputLevel.averageDecibels
+                value: model.latestInputLevel.averageLevel,
+                percentage: model.latestInputLevel.averagePercentage,
+                decibels: model.latestInputLevel.averageDecibels
             )
 
-            LevelMeterRow(
-                label: "Peak",
-                value: inputLevel.peakLevel,
-                percentage: inputLevel.peakPercentage,
-                decibels: inputLevel.peakDecibels
-            )
+            if isExpanded {
+                LevelMeterRow(
+                    label: "Peak",
+                    value: model.latestInputLevel.peakLevel,
+                    percentage: model.latestInputLevel.peakPercentage,
+                    decibels: model.latestInputLevel.peakDecibels
+                )
+
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Mic Gain")
+                            .font(.subheadline.weight(.semibold))
+
+                        Spacer()
+
+                        Text(model.micGainLabel)
+                            .font(.subheadline.monospacedDigit())
+
+                        Text("(\(model.micGainDecibelsLabel))")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Slider(
+                        value: micGainBinding,
+                        in: Double(AppModel.minimumMicGain) ... Double(AppModel.maximumMicGain),
+                        step: 0.1
+                    )
+                    .accessibilityLabel("Microphone gain")
+                }
+                .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
         .padding(20)
         .frame(maxWidth: SessionLayout.panelWidth)
@@ -222,6 +270,13 @@ private struct MeterPanel: View {
         .overlay(
             RoundedRectangle(cornerRadius: 28, style: .continuous)
                 .stroke(AppPalette.panelBorder, lineWidth: 1)
+        )
+    }
+
+    private var micGainBinding: Binding<Double> {
+        Binding(
+            get: { Double(model.micGain) },
+            set: { model.updateMicGain(Float($0)) }
         )
     }
 }

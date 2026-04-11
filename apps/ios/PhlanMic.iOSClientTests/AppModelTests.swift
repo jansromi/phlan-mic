@@ -3,6 +3,33 @@ import XCTest
 
 @MainActor
 final class AppModelTests: XCTestCase {
+    func testMicGainDefaultsToUnity() {
+        let harness = Harness()
+        let model = makeModel(harness: harness)
+
+        XCTAssertEqual(model.micGain, AppModel.defaultMicGain)
+        XCTAssertEqual(harness.captureGainValues, [AppModel.defaultMicGain])
+        XCTAssertEqual(model.micGainLabel, "1.0x")
+        XCTAssertEqual(model.micGainDecibelsLabel, "+0.0 dB")
+    }
+
+    func testUpdatingMicGainClampsAndForwardsToCaptureClient() {
+        let harness = Harness()
+        let model = makeModel(harness: harness)
+
+        model.updateMicGain(2.4)
+        XCTAssertEqual(model.micGain, 2.4, accuracy: 0.000_1)
+        XCTAssertEqual(harness.captureGainValues.last ?? 0, 2.4, accuracy: 0.000_1)
+
+        model.updateMicGain(9)
+        XCTAssertEqual(model.micGain, AppModel.maximumMicGain)
+        XCTAssertEqual(harness.captureGainValues.last ?? 0, AppModel.maximumMicGain, accuracy: 0.000_1)
+
+        model.updateMicGain(0.1)
+        XCTAssertEqual(model.micGain, AppModel.minimumMicGain)
+        XCTAssertEqual(harness.captureGainValues.last ?? 0, AppModel.minimumMicGain, accuracy: 0.000_1)
+    }
+
     func testPrimaryTapRequestsPermissionBeforeConnecting() async {
         let harness = Harness()
         harness.currentPermissionStatus = .unknown
@@ -615,6 +642,7 @@ private final class Harness {
     var requestPermissionCallCount = 0
     var stopCaptureCallCount = 0
     var createdTransportModes: [HostConfiguration.TransportMode] = []
+    var captureGainValues: [Float] = []
     var captureSessionEventHandler: (@Sendable (CaptureSessionEvent) -> Void)?
     let transport = MockTransportClient()
 
@@ -641,6 +669,9 @@ private final class Harness {
                     sessionMode: "measurement",
                     routeSummary: "inputs[builtInMic=Built-In Microphone] outputs[none]"
                 )
+            },
+            setCaptureGain: { [unowned self] gain in
+                captureGainValues.append(gain)
             },
             stopCapture: { [unowned self] in
                 stopCaptureCallCount += 1

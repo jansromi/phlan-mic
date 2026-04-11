@@ -141,6 +141,10 @@ enum BackgroundContinuationPolicy: String, Sendable, Equatable {
 
 @MainActor
 final class AppModel: ObservableObject {
+    static let minimumMicGain: Float = 0.5
+    static let maximumMicGain: Float = 3.0
+    static let defaultMicGain: Float = 1.0
+
     private enum TransportTerminalCause: Sendable, Equatable {
         case none
         case userStop
@@ -367,6 +371,7 @@ final class AppModel: ObservableObject {
             @escaping @Sendable (Error) -> Void,
             @escaping @Sendable (CaptureSessionEvent) -> Void
         ) throws -> MicrophoneCaptureStartup
+        var setCaptureGain: (Float) -> Void
         var stopCapture: () -> Void
         var makeTransportClient: (
             HostConfiguration.TransportMode,
@@ -395,6 +400,9 @@ final class AppModel: ObservableObject {
                         onFailure: onFailure,
                         onSessionEvent: onSessionEvent
                     )
+                },
+                setCaptureGain: { gain in
+                    captureClient.setInputGain(gain)
                 },
                 stopCapture: {
                     captureClient.stopCapture()
@@ -450,6 +458,7 @@ final class AppModel: ObservableObject {
     @Published var captureDetail = "Request microphone permission before starting live capture."
     @Published var captureSessionSummary = "Not started."
     @Published var latestInputLevel = AudioInputLevel.silence
+    @Published var micGain = AppModel.defaultMicGain
     @Published var capturedFrameCount = 0
     @Published var latestFrameSummary = "No audio frames captured yet."
     @Published var transportStatus = TransportStatus.disconnected
@@ -496,10 +505,21 @@ final class AppModel: ObservableObject {
     init(dependencies: Dependencies = .live()) {
         self.dependencies = dependencies
 
+        dependencies.setCaptureGain(Self.defaultMicGain)
         log("App model initialized.")
         refreshSetupReadiness()
         syncCaptureAvailability()
         logStartupSnapshot()
+    }
+
+    var micGainLabel: String {
+        micGain.formatted(.number.precision(.fractionLength(1))) + "x"
+    }
+
+    var micGainDecibelsLabel: String {
+        let gainDecibels = 20 * log10(max(micGain, 0.000_1))
+        let formatter = FloatingPointFormatStyle<Float>.number.precision(.fractionLength(1))
+        return (gainDecibels >= 0 ? "+" : "") + gainDecibels.formatted(formatter) + " dB"
     }
 
     var primaryMicVisualState: PrimaryMicVisualState {
@@ -941,6 +961,16 @@ final class AppModel: ObservableObject {
     func updateTransportMode(_ transportMode: HostConfiguration.TransportMode) {
         hostConfiguration.transportMode = transportMode
         refreshSetupReadiness()
+    }
+
+    func updateMicGain(_ gain: Float) {
+        let clampedGain = min(Self.maximumMicGain, max(Self.minimumMicGain, gain))
+        guard micGain != clampedGain else {
+            return
+        }
+
+        micGain = clampedGain
+        dependencies.setCaptureGain(clampedGain)
     }
 
     func recordBringUpCheckpoint() {
