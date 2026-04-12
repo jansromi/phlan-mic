@@ -26,6 +26,7 @@ internal sealed class MainForm : Form
     private readonly TextBox diagnosticsTextBox;
     private readonly AudioLevelMeterControl signalMeterControl;
     private readonly System.Windows.Forms.Timer snapshotRefreshTimer;
+    private HostRuntimeConfig currentEffectiveConfig;
     private WindowsHostRuntime runtime;
     private WindowsHostRuntimeSnapshot? lastAppliedSnapshot;
     private WindowsHostRuntimeSnapshot? pendingSnapshot;
@@ -43,7 +44,8 @@ internal sealed class MainForm : Form
         this.outputCatalog = outputCatalog ?? throw new ArgumentNullException(nameof(outputCatalog));
         this.logger = logger ?? throw new ArgumentNullException(nameof(logger));
         this.configPath = configPath ?? throw new ArgumentNullException(nameof(configPath));
-        runtime = CreateRuntime(initialEffectiveConfig ?? throw new ArgumentNullException(nameof(initialEffectiveConfig)));
+        currentEffectiveConfig = initialEffectiveConfig ?? throw new ArgumentNullException(nameof(initialEffectiveConfig));
+        runtime = CreateRuntime(currentEffectiveConfig);
 
         Text = "PhlanMic Windows Host";
         var applicationIcon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
@@ -518,7 +520,7 @@ internal sealed class MainForm : Form
         copyButton.Enabled = !changingRuntimeState;
     }
 
-    private static string BuildOutputText(WindowsHostRuntimeSnapshot snapshot)
+    private string BuildOutputText(WindowsHostRuntimeSnapshot snapshot)
     {
         var renderSignalMeter = snapshot.AudioOutput.SignalMeter;
         var captureProbeSignalMeter = snapshot.AudioOutput.CaptureProbeSignalMeter;
@@ -531,6 +533,12 @@ internal sealed class MainForm : Form
         if (!string.IsNullOrWhiteSpace(snapshot.Output.Detail))
         {
             builder.AppendLine($"Detail: {snapshot.Output.Detail}");
+        }
+
+        if (OutputConfig.UsesVbCableEndpoint(currentEffectiveConfig.Output.Mode) &&
+            (OutputConfig.UsesLocalToneProbe(currentEffectiveConfig.Output.Mode) || currentEffectiveConfig.TestMode.Enabled))
+        {
+            builder.AppendLine($"Local Tone Probe: active @ {currentEffectiveConfig.TestMode.SignalFrequencyHz} Hz (receiver bypassed)");
         }
 
         builder.AppendLine($"Device: {snapshot.AudioOutput.DeviceName ?? "n/a"}")
@@ -550,7 +558,7 @@ internal sealed class MainForm : Form
         return builder.ToString().TrimEnd();
     }
 
-    private static string BuildSessionText(WindowsHostRuntimeSnapshot snapshot)
+    private string BuildSessionText(WindowsHostRuntimeSnapshot snapshot)
     {
         var stats = snapshot.Statistics;
         var robustness = stats.Robustness;
@@ -576,6 +584,12 @@ internal sealed class MainForm : Form
             .AppendLine($"Estimated Buffer Latency Ms: {robustness.EstimatedBufferLatencyMs}")
             .AppendLine($"Output Submitted / Completed: {snapshot.AudioOutput.SubmittedFrames} / {snapshot.AudioOutput.CompletedFrames}")
             .AppendLine($"Last Output Frame: {FormatTimestamp(snapshot.AudioOutput.LastCompletedAtUtc)}");
+
+        if (OutputConfig.UsesVbCableEndpoint(currentEffectiveConfig.Output.Mode) &&
+            (OutputConfig.UsesLocalToneProbe(currentEffectiveConfig.Output.Mode) || currentEffectiveConfig.TestMode.Enabled))
+        {
+            builder.AppendLine($"Input Source: Local generated tone @ {currentEffectiveConfig.TestMode.SignalFrequencyHz} Hz");
+        }
 
         if (!string.IsNullOrWhiteSpace(snapshot.Session.StatusDetail))
         {
@@ -705,6 +719,7 @@ internal sealed class MainForm : Form
             await previousRuntime.DisposeAsync();
         }
 
+        currentEffectiveConfig = effectiveConfig;
         runtime = CreateRuntime(effectiveConfig);
         pendingEffectiveConfig = null;
         runtime.SnapshotChanged += OnSnapshotChanged;
