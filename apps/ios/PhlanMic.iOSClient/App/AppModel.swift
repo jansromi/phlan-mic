@@ -1,3 +1,4 @@
+@preconcurrency import ActivityKit
 import Combine
 import Foundation
 import SwiftUI
@@ -144,6 +145,7 @@ final class AppModel: ObservableObject {
     static let minimumMicGain: Float = 0.5
     static let maximumMicGain: Float = 3.0
     static let defaultMicGain: Float = 1.0
+    private static let quietLiveActivityUpdateInterval: TimeInterval = 0.35
 
     private enum TransportTerminalCause: Sendable, Equatable {
         case none
@@ -559,6 +561,8 @@ final class AppModel: ObservableObject {
     private var captureAudioSessionProfile = CaptureAudioSessionProfile.recordMeasurement
     private var lastBackgroundTransitionTime: Date?
     private var lastTransportTerminalCause = TransportTerminalCause.none
+    private var liveActivity: Activity<PhlanMicActivityAttributes>?
+    private var lastLiveActivityQuietUpdate = Date.distantPast
 
     private struct PendingSystemStop {
         let reason: SessionStopReason
@@ -815,26 +819,6 @@ final class AppModel: ObservableObject {
 
     var sessionHealthSummary: String {
         sessionHealthItems.map(\.value).joined(separator: " • ")
-    }
-
-    var sessionHealthFootnote: String? {
-        if transportStatus == .error {
-            return lastTransportError
-        }
-
-        if shouldSurfaceBackgroundStatus {
-            return backgroundStatusDetail
-        }
-
-        if transportStatus.isActive && transportStatus != .streaming {
-            return transportDetail
-        }
-
-        if shouldSurfaceLifecycleStop {
-            return lastSystemStopDetail
-        }
-
-        return nil
     }
 
     func sessionHealthDetail(for itemID: String) -> SessionHealthItem? {
@@ -1096,6 +1080,7 @@ final class AppModel: ObservableObject {
         transportReconnectCount = max(0, transportAttemptCount - 1)
         transportStatus = .connecting
         transportDetail = initialTransportConnectDetail
+        startLiveActivity()
 
         log("Connecting to the Windows host at \(hostConfiguration.displayEndpoint) using \(hostConfiguration.transportMode.label).")
 
@@ -1130,6 +1115,7 @@ final class AppModel: ObservableObject {
         lastTransportTerminalCause = .userStop
         transportStatus = .stopping
         transportDetail = stoppingTransportDetail
+        endLiveActivity()
         log("Stopping the \(hostConfiguration.transportMode.label) session.")
 
         if captureStatus == .starting || captureStatus == .capturing {
@@ -1147,6 +1133,185 @@ final class AppModel: ObservableObject {
         dependencies.log(message)
         diagnostics.insert(DiagnosticEntry(timestamp: Date(), message: message), at: 0)
         diagnostics = Array(diagnostics.prefix(12))
+    }
+
+    private func startLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            liveActivity = nil
+            return
+        }
+
+        let attributes = PhlanMicActivityAttributes(
+            hostEndpoint: hostConfiguration.displayEndpoint,
+            transportMode: hostConfiguration.transportMode.label
+        )
+        let content = buildCurrentActivityContent()
+
+        Task { @MainActor in
+            if let existing = Activity<PhlanMicActivityAttributes>.activities.first(where: { $0.attributes == attributes }) {
+                liveActivity = existing
+                await existing.update(content)
+                lastLiveActivityQuietUpdate = Date()
+                return
+            }
+
+            for activity in trackedLiveActivities() where activity.attributes != attributes {
+                await activity.end(
+                    nil as ActivityContent<PhlanMicActivityAttributes.ContentState>?,
+                    dismissalPolicy: .immediate
+                )
+            }
+
+            do {
+                liveActivity = try Activity.request(attributes: attributes, content: content, pushType: nil)
+                lastLiveActivityQuietUpdate = Date()
+            } catch {
+                log("Live Activity could not start: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    private func updateLiveActivity() {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            liveActivity = nil
+            return
+        }
+
+        Task { @MainActor in
+            guard let activity = resolveCurrentLiveActivity() else {
+                return
+            }
+
+            let now = Date()
+            guard now.timeIntervalSince(lastLiveActivityQuietUpdate) >= Self.quietLiveActivityUpdateInterval else {
+                return
+            }
+
+            lastLiveActivityQuietUpdate = now
+            await activity.update(buildCurrentActivityContent())
+        }
+    }
+
+    private func updateLiveActivityWithAlert(reason: String) {
+        guard ActivityAuthorizationInfo().areActivitiesEnabled else {
+            liveActivity = nil
+            return
+        }
+
+        let content = buildCurrentActivityContent(alertReason: reason)
+        let alertConfiguration = buildLiveActivityAlertConfiguration(reason: reason)
+
+        Task { @MainActor in
+            guard let activity = resolveCurrentLiveActivity() else {
+                return
+            }
+
+            lastLiveActivityQuietUpdate = Date()
+            await activity.update(content, alertConfiguration: alertConfiguration)
+        }
+    }
+
+    private func endLiveActivity() {
+        endLiveActivity(alertReason: nil)
+    }
+
+    private func endLiveActivity(alertReason: String?) {
+        let activities = trackedLiveActivities()
+        guard !activities.isEmpty else {
+            liveActivity = nil
+            lastLiveActivityQuietUpdate = .distantPast
+            return
+        }
+
+        let finalContent = buildCurrentActivityContent(alertReason: alertReason)
+        let alertConfiguration = alertReason.map(buildLiveActivityAlertConfiguration(reason:))
+        liveActivity = nil
+        lastLiveActivityQuietUpdate = .distantPast
+
+        Task { @MainActor in
+            for activity in activities {
+                if let alertConfiguration {
+                    await activity.update(finalContent, alertConfiguration: alertConfiguration)
+                }
+
+                await activity.end(finalContent, dismissalPolicy: .default)
+            }
+        }
+    }
+
+    private func buildCurrentContentState(alertReason: String? = nil) -> PhlanMicActivityAttributes.ContentState {
+        let shortStatusLabel: String
+        switch transportStatus {
+        case .streaming:
+            shortStatusLabel = "Live"
+        case .connected:
+            shortStatusLabel = "Ready"
+        case .error:
+            shortStatusLabel = "Error"
+        case .stopping:
+            shortStatusLabel = "Stop"
+        case .disconnected:
+            shortStatusLabel = "Offline"
+        case .connecting, .controlConnected, .handshakeAccepted:
+            shortStatusLabel = "Joining"
+        }
+
+        return PhlanMicActivityAttributes.ContentState(
+            transportStatusLabel: transportStatus.rawValue,
+            transportStatusTint: transportStatus.tintName,
+            shortStatusLabel: shortStatusLabel,
+            audioLevelPercentage: max(0, min(latestInputLevel.averagePercentage, 100)),
+            framesSent: max(0, transportFramesSent),
+            alertReason: alertReason
+        )
+    }
+
+    private func buildCurrentActivityContent(
+        alertReason: String? = nil
+    ) -> ActivityContent<PhlanMicActivityAttributes.ContentState> {
+        ActivityContent(
+            state: buildCurrentContentState(alertReason: alertReason),
+            staleDate: nil
+        )
+    }
+
+    private func buildLiveActivityAlertConfiguration(reason: String) -> AlertConfiguration {
+        AlertConfiguration(
+            title: LocalizedStringResource("PhlanMic"),
+            body: LocalizedStringResource(String.LocalizationValue(reason)),
+            sound: .default
+        )
+    }
+
+    private func resolveCurrentLiveActivity() -> Activity<PhlanMicActivityAttributes>? {
+        let currentAttributes = PhlanMicActivityAttributes(
+            hostEndpoint: hostConfiguration.displayEndpoint,
+            transportMode: hostConfiguration.transportMode.label
+        )
+
+        if let liveActivity, liveActivity.attributes == currentAttributes {
+            return liveActivity
+        }
+
+        if let existing = Activity<PhlanMicActivityAttributes>.activities.first(where: { $0.attributes == currentAttributes }) {
+            liveActivity = existing
+            return existing
+        }
+
+        return nil
+    }
+
+    private func trackedLiveActivities() -> [Activity<PhlanMicActivityAttributes>] {
+        let knownActivities = Activity<PhlanMicActivityAttributes>.activities
+        if !knownActivities.isEmpty {
+            return knownActivities
+        }
+
+        if let liveActivity {
+            return [liveActivity]
+        }
+
+        return []
     }
 
     var canRequestMicrophonePermission: Bool {
@@ -1430,6 +1595,7 @@ final class AppModel: ObservableObject {
 
                 Task { @MainActor in
                     model.latestInputLevel = levelUpdate
+                    model.updateLiveActivity()
                 }
             }
 
@@ -1603,10 +1769,12 @@ final class AppModel: ObservableObject {
             case .controlConnected:
                 transportStatus = .controlConnected
                 transportDetail = detail
+                updateLiveActivity()
                 log(detail)
             case .handshakeAccepted:
                 transportStatus = .handshakeAccepted
                 transportDetail = detail
+                updateLiveActivity()
                 log(detail)
             case .readyForAudio:
                 guard transportStatus != .stopping else {
@@ -1616,6 +1784,7 @@ final class AppModel: ObservableObject {
                 transportStatus = .connected
                 transportDetail = detail
                 captureOwnedByTransport = true
+                updateLiveActivityWithAlert(reason: "Transport Ready")
                 log(detail)
 
                 Task {
@@ -1671,10 +1840,13 @@ final class AppModel: ObservableObject {
             if transportStatus == .connected {
                 transportStatus = .streaming
                 transportDetail = streamingTransportDetail
+                updateLiveActivityWithAlert(reason: "Streaming Started")
                 log("Streaming started with microphone frame \(frame.sequenceNumber) over \(hostConfiguration.transportMode.label).")
             } else if transportFramesSent.isMultiple(of: 250) {
                 log("Streaming health: \(transportFramesSent) frames / \(transportBytesSent) bytes sent to \(hostConfiguration.displayEndpoint).")
             }
+
+            updateLiveActivity()
         case .failure(let error):
             handleTransportFailure(
                 detail: error.localizedDescription,
@@ -1698,10 +1870,13 @@ final class AppModel: ObservableObject {
         if transportStatus == .connected && snapshot.isFirstSuccess {
             transportStatus = .streaming
             transportDetail = streamingTransportDetail
+            updateLiveActivityWithAlert(reason: "Streaming Started")
             log("Streaming started with microphone frame \(latestFrame.sequenceNumber) over \(hostConfiguration.transportMode.label).")
         } else if transportFramesSent.isMultiple(of: 250) {
             log("Streaming health: \(transportFramesSent) frames / \(transportBytesSent) bytes sent to \(hostConfiguration.displayEndpoint).")
         }
+
+        updateLiveActivity()
     }
 
     private func handleTransportFailure(detail: String, logMessage: String) {
@@ -1725,6 +1900,7 @@ final class AppModel: ObservableObject {
         transportDetail = resolvedDetail
         lastTransportError = resolvedDetail
         updateBackgroundContinuationStatusForTerminalFailure(detail: resolvedDetail)
+        endLiveActivity(alertReason: "Error: \(resolvedDetail)")
         log(logMessage)
         transportClient?.disconnect()
     }
@@ -1784,6 +1960,7 @@ final class AppModel: ObservableObject {
         transportStatus = .disconnected
         transportDetail = pendingSystemStop.detail
         lastTransportError = "No transport errors."
+        endLiveActivity()
     }
 
     private func clearLifecycleStopPresentation() {

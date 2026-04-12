@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 56;
+	objectVersion = 70;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -25,6 +25,11 @@
 		A00000010000000000000016 /* TransportProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000018 /* TransportProtocolTests.swift */; };
 		A00000010000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000019 /* Assets.xcassets */; };
 		A00000010000000000000018 /* ToneGeneratorCaptureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000020 /* ToneGeneratorCaptureClient.swift */; };
+		A00000010000000000000019 /* PhlanMicActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000021 /* PhlanMicActivityAttributes.swift */; };
+		A00000010000000000000020 /* PhlanMicActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000021 /* PhlanMicActivityAttributes.swift */; };
+		D47759C62F8BCAD80024B73C /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D47759C52F8BCAD80024B73C /* WidgetKit.framework */; };
+		D47759C82F8BCAD80024B73C /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = D47759C72F8BCAD80024B73C /* SwiftUI.framework */; };
+		D47759D92F8BCAD90024B73C /* PhlanMicLiveActivityExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D47759C32F8BCAD80024B73C /* PhlanMicLiveActivityExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -35,7 +40,28 @@
 			remoteGlobalIDString = A00000410000000000000001;
 			remoteInfo = PhlanMic.iOSClient;
 		};
+		D47759D72F8BCAD90024B73C /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000510000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D47759C22F8BCAD80024B73C;
+			remoteInfo = PhlanMicLiveActivityExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D47759DA2F8BCAD90024B73C /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				D47759D92F8BCAD90024B73C /* PhlanMicLiveActivityExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A00000110000000000000001 /* PhlanMicIOSClientApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhlanMicIOSClientApp.swift; sourceTree = "<group>"; };
@@ -58,7 +84,25 @@
 		A00000110000000000000018 /* TransportProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProtocolTests.swift; sourceTree = "<group>"; };
 		A00000110000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00000110000000000000020 /* ToneGeneratorCaptureClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToneGeneratorCaptureClient.swift; sourceTree = "<group>"; };
+		A00000110000000000000021 /* PhlanMicActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhlanMicActivityAttributes.swift; sourceTree = "<group>"; };
+		D47759C32F8BCAD80024B73C /* PhlanMicLiveActivityExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PhlanMicLiveActivityExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		D47759C52F8BCAD80024B73C /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		D47759C72F8BCAD80024B73C /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		D47759DD2F8BCAD90024B73C /* PBXFileSystemSynchronizedBuildFileExceptionSet */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = D47759C22F8BCAD80024B73C /* PhlanMicLiveActivityExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
+/* Begin PBXFileSystemSynchronizedRootGroup section */
+		D47759C92F8BCAD80024B73C /* PhlanMicLiveActivity */ = {isa = PBXFileSystemSynchronizedRootGroup; exceptions = (D47759DD2F8BCAD90024B73C /* PBXFileSystemSynchronizedBuildFileExceptionSet */, ); explicitFileTypes = {}; explicitFolders = (); path = PhlanMicLiveActivity; sourceTree = "<group>"; };
+/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A00000210000000000000001 /* Frameworks */ = {
@@ -76,6 +120,15 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D47759C02F8BCAD80024B73C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D47759C82F8BCAD80024B73C /* SwiftUI.framework in Frameworks */,
+				D47759C62F8BCAD80024B73C /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -84,7 +137,11 @@
 			children = (
 				A00000310000000000000002 /* PhlanMic.iOSClient */,
 				A00000310000000000000009 /* PhlanMic.iOSClientTests */,
+				A00000310000000000000010 /* Shared */,
+				D47759C92F8BCAD80024B73C /* PhlanMicLiveActivity */,
+				D47759C42F8BCAD80024B73C /* Frameworks */,
 				A00000310000000000000003 /* Products */,
+				D47759BE2F8BC3390024B73C /* Recovered References */,
 			);
 			sourceTree = "<group>";
 		};
@@ -106,6 +163,7 @@
 			children = (
 				A00000110000000000000009 /* PhlanMic.iOSClient.app */,
 				A00000110000000000000014 /* PhlanMic.iOSClientTests.xctest */,
+				D47759C32F8BCAD80024B73C /* PhlanMicLiveActivityExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -168,6 +226,31 @@
 			path = PhlanMic.iOSClientTests;
 			sourceTree = "<group>";
 		};
+		A00000310000000000000010 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000021 /* PhlanMicActivityAttributes.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		D47759BE2F8BC3390024B73C /* Recovered References */ = {
+			isa = PBXGroup;
+			children = (
+				A00000110000000000000012 /* XCTest.framework */,
+			);
+			name = "Recovered References";
+			sourceTree = "<group>";
+		};
+		D47759C42F8BCAD80024B73C /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				D47759C52F8BCAD80024B73C /* WidgetKit.framework */,
+				D47759C72F8BCAD80024B73C /* SwiftUI.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -178,10 +261,12 @@
 				A00000610000000000000001 /* Sources */,
 				A00000210000000000000001 /* Frameworks */,
 				A00000710000000000000001 /* Resources */,
+				D47759DA2F8BCAD90024B73C /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D47759D82F8BCAD90024B73C /* PBXTargetDependency */,
 			);
 			name = PhlanMic.iOSClient;
 			productName = PhlanMic.iOSClient;
@@ -206,6 +291,28 @@
 			productReference = A00000110000000000000014 /* PhlanMic.iOSClientTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		D47759C22F8BCAD80024B73C /* PhlanMicLiveActivityExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D47759DE2F8BCAD90024B73C /* Build configuration list for PBXNativeTarget "PhlanMicLiveActivityExtension" */;
+			buildPhases = (
+				D47759BF2F8BCAD80024B73C /* Sources */,
+				D47759C02F8BCAD80024B73C /* Frameworks */,
+				D47759C12F8BCAD80024B73C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				D47759C92F8BCAD80024B73C /* PhlanMicLiveActivity */,
+			);
+			name = PhlanMicLiveActivityExtension;
+			packageProductDependencies = (
+			);
+			productName = PhlanMicLiveActivityExtension;
+			productReference = D47759C32F8BCAD80024B73C /* PhlanMicLiveActivityExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -213,7 +320,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2603;
+				LastSwiftUpdateCheck = 2630;
 				LastUpgradeCheck = 2603;
 				TargetAttributes = {
 					A00000410000000000000001 = {
@@ -222,6 +329,9 @@
 					A00000410000000000000002 = {
 						CreatedOnToolsVersion = 26.3;
 						TestTargetID = A00000410000000000000001;
+					};
+					D47759C22F8BCAD80024B73C = {
+						CreatedOnToolsVersion = 26.3;
 					};
 				};
 			};
@@ -240,6 +350,7 @@
 			targets = (
 				A00000410000000000000001 /* PhlanMic.iOSClient */,
 				A00000410000000000000002 /* PhlanMic.iOSClientTests */,
+				D47759C22F8BCAD80024B73C /* PhlanMicLiveActivityExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -254,6 +365,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A00000710000000000000002 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D47759C12F8BCAD80024B73C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -279,6 +397,7 @@
 				A00000010000000000000010 /* DebugTcpPcmClient.swift in Sources */,
 				A00000010000000000000014 /* TransportProtocol.swift in Sources */,
 				A00000010000000000000001 /* PhlanMicIOSClientApp.swift in Sources */,
+				A00000010000000000000019 /* PhlanMicActivityAttributes.swift in Sources */,
 				A00000010000000000000015 /* UdpRawPcmTransportClient.swift in Sources */,
 				A00000010000000000000018 /* ToneGeneratorCaptureClient.swift in Sources */,
 			);
@@ -293,6 +412,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D47759BF2F8BCAD80024B73C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000010000000000000020 /* PhlanMicActivityAttributes.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -300,6 +427,11 @@
 			isa = PBXTargetDependency;
 			target = A00000410000000000000001 /* PhlanMic.iOSClient */;
 			targetProxy = A00001010000000000000001 /* PBXContainerItemProxy */;
+		};
+		D47759D82F8BCAD90024B73C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D47759C22F8BCAD80024B73C /* PhlanMicLiveActivityExtension */;
+			targetProxy = D47759D72F8BCAD90024B73C /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -362,20 +494,18 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = PTHMJ2UTDG;
-				ENABLE_TESTABILITY = YES;
 				ENABLE_PREVIEWS = YES;
+				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PhlanMic.iOSClient/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = PhlanMic;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "PhlanMic connects to your Windows host on the local network to stream microphone audio.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "PhlanMic uses the microphone to stream voice audio to your Windows host.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIBackgroundModes = (
-					audio,
-				);
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				INFOPLIST_FILE = PhlanMic.iOSClient/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -401,17 +531,15 @@
 				DEVELOPMENT_TEAM = PTHMJ2UTDG;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = PhlanMic.iOSClient/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = PhlanMic;
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "PhlanMic connects to your Windows host on the local network to stream microphone audio.";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "PhlanMic uses the microphone to stream voice audio to your Windows host.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
-				INFOPLIST_KEY_UIBackgroundModes = (
-					audio,
-				);
+				INFOPLIST_KEY_UIBackgroundModes = audio;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
-				INFOPLIST_FILE = PhlanMic.iOSClient/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -481,6 +609,137 @@
 			};
 			name = Release;
 		};
+		D47759DB2F8BCAD90024B73C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PTHMJ2UTDG;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PhlanMicLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PhlanMicLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jansromi.phlanmic.iosclient.live-activity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		D47759DC2F8BCAD90024B73C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = PTHMJ2UTDG;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = PhlanMicLiveActivity/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = PhlanMicLiveActivity;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = com.jansromi.phlanmic.iosclient.live-activity;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -507,6 +766,15 @@
 			buildConfigurations = (
 				A00000910000000000000005 /* Debug */,
 				A00000910000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		D47759DE2F8BCAD90024B73C /* Build configuration list for PBXNativeTarget "PhlanMicLiveActivityExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D47759DB2F8BCAD90024B73C /* Debug */,
+				D47759DC2F8BCAD90024B73C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

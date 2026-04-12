@@ -182,7 +182,6 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.sessionHealthItems.map(\.title), ["Status", "Sent", "Last"])
         XCTAssertEqual(model.sessionHealthItems.map(\.value), ["Ready", "Idle", "None"])
         XCTAssertEqual(model.sessionHealthSummary, "Ready • Idle • None")
-        XCTAssertNil(model.sessionHealthFootnote)
     }
 
     func testSessionHealthShowsStreamingStateAfterSuccessfulSend() {
@@ -205,7 +204,6 @@ final class AppModelTests: XCTestCase {
             model.sessionHealthItems[0].detail,
             "The session is live and microphone audio is reaching 10.0.0.42:42100."
         )
-        XCTAssertNil(model.sessionHealthFootnote)
     }
 
     func testDefaultBackgroundPolicyAllowsActiveSessionContinuation() {
@@ -268,7 +266,6 @@ final class AppModelTests: XCTestCase {
             "The live session is continuing in the background under the active-session-only policy."
         )
         XCTAssertEqual(model.connectionCardDetail, model.backgroundStatusDetail)
-        XCTAssertEqual(model.sessionHealthFootnote, model.backgroundStatusDetail)
     }
 
     func testSceneBecomingInactiveStopsStreamingSession() async {

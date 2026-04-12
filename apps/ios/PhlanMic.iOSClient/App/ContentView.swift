@@ -68,6 +68,7 @@ struct ContentView: View {
                             PrimaryMicButton(state: model.primaryMicVisualState)
                         }
                         .buttonStyle(.plain)
+                        .sensoryFeedback(.impact(weight: .medium, intensity: 0.7), trigger: model.primaryMicVisualState)
 
                         VStack(spacing: 8) {
                             AnimatedConnectingLabel(
@@ -114,6 +115,12 @@ struct ContentView: View {
                     .padding(.horizontal, 20)
                     .padding(.bottom, 12)
             }
+        }
+        .sensoryFeedback(.success, trigger: model.transportStatus) { oldValue, newValue in
+            newValue == .streaming
+        }
+        .sensoryFeedback(.error, trigger: model.transportStatus) { oldValue, newValue in
+            newValue == .error
         }
         .sheet(item: $model.presentedSheet) { sheet in
             NavigationStack {
@@ -178,6 +185,8 @@ private struct AnimatedConnectingLabel: View {
             }
         } else {
             Text(text)
+                .contentTransition(.numericText())
+                .animation(.easeInOut(duration: 0.25), value: text)
         }
     }
 }
@@ -207,14 +216,24 @@ private struct SessionBackground: View {
     }
 }
 
+
 private struct PrimaryMicButton: View {
     let state: AppModel.PrimaryMicVisualState
+    @State private var isPulsing = false
 
     var body: some View {
         ZStack {
             Circle()
                 .fill(baseColor.opacity(0.18))
                 .frame(width: 220, height: 220)
+
+            if state == .live {
+                Circle()
+                    .stroke(baseColor.opacity(0.35), lineWidth: 2)
+                    .frame(width: 180, height: 180)
+                    .scaleEffect(isPulsing ? 1.3 : 1.0)
+                    .opacity(isPulsing ? 0 : 0.6)
+            }
 
             Circle()
                 .fill(baseColor)
@@ -230,6 +249,16 @@ private struct PrimaryMicButton: View {
         }
         .animation(.easeInOut(duration: 0.2), value: state.tintName)
         .accessibilityLabel("Primary microphone control")
+        .onChange(of: state) { _, newState in
+            if newState == .live {
+                isPulsing = false
+                withAnimation(.easeOut(duration: 1.5).repeatForever(autoreverses: false)) {
+                    isPulsing = true
+                }
+            } else {
+                isPulsing = false
+            }
+        }
     }
 
     private var baseColor: Color {
@@ -307,6 +336,7 @@ private struct InputMeterPanel: View {
 
             toggleExpanded()
         }
+        .sensoryFeedback(.selection, trigger: isExpanded)
     }
 
     private var micGainBinding: Binding<Double> {
@@ -320,6 +350,7 @@ private struct InputMeterPanel: View {
         HStack(spacing: 12) {
             Text("Input Meter")
                 .font(AppTypography.cardTitle)
+                .foregroundStyle(AppPalette.textPrimary)
 
             Spacer()
 
@@ -389,6 +420,7 @@ private struct LevelMeterRow: View {
                     Capsule()
                         .fill(meterColors.first ?? AppPalette.meterLow)
                         .frame(width: geometry.size.width * CGFloat(max(0, min(value, 1))))
+                        .animation(.linear(duration: 0.08), value: value)
                 }
             }
             .frame(height: 10)
@@ -447,14 +479,6 @@ private struct ConnectionStatusCard: View {
                         .foregroundStyle(AppPalette.textPrimary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
-
-                    if !model.connectionCardDetail.isEmpty {
-                        Text(model.connectionCardDetail)
-                            .font(AppTypography.detail)
-                            .foregroundStyle(AppPalette.textSecondary)
-                            .multilineTextAlignment(.leading)
-                            .lineLimit(2)
-                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
@@ -489,11 +513,6 @@ private struct SessionHealthPanel: View {
 
                     Spacer()
 
-                    SummaryBadge(
-                        text: headerSummaryText,
-                        tint: AppPalette.textSecondary
-                    )
-
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                         .font(AppTypography.metricLabel)
                         .foregroundStyle(AppPalette.textSecondary)
@@ -514,17 +533,12 @@ private struct SessionHealthPanel: View {
                         .buttonStyle(.plain)
                     }
                 }
-
-                if let footnote = model.sessionHealthFootnote {
-                    Text(footnote)
-                        .font(AppTypography.detail)
-                        .foregroundStyle(AppPalette.textSecondary)
-                }
             }
         }
         .padding(SessionLayout.panelPadding)
         .frame(maxWidth: SessionLayout.panelWidth)
         .sessionCard()
+        .sensoryFeedback(.selection, trigger: isExpanded)
         .sheet(item: selectedHealthItemBinding) { item in
             SessionHealthDetailSheet(item: item)
                 .presentationDetents([.height(220), .medium])
@@ -545,15 +559,6 @@ private struct SessionHealthPanel: View {
                 selectedItemID = newValue?.id
             }
         )
-    }
-
-    private var headerSummaryText: String {
-        let items = model.sessionHealthItems
-        guard items.count == 3 else {
-            return model.sessionHealthSummary
-        }
-
-        return "\(items[0].value) · \(items[1].value) · \(items[2].value)"
     }
 }
 

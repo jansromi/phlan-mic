@@ -26,6 +26,8 @@
 	<string>PhlanMic connects to your Windows host on the local network to stream microphone audio.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>PhlanMic uses the microphone to stream voice audio to your Windows host.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
