@@ -320,7 +320,7 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
     }
 
     private IAudioInputSource CreateInputSource(AudioStreamPipeline pipeline) =>
-        config.TestMode.Enabled
+        ShouldUseGeneratedSignalInput()
             ? new GeneratedSignalTestSource(config.AudioFormat, config.TestMode, pipeline)
             : CreateReceiverInputSource(pipeline);
 
@@ -347,7 +347,7 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             return new DebugPipelineDrain(pipeline);
         }
 
-        if (string.Equals(config.Output.Mode, OutputConfig.VbCableMode, StringComparison.OrdinalIgnoreCase))
+        if (OutputConfig.UsesVbCableEndpoint(config.Output.Mode))
         {
             return CreateVbCableOutputSink(pipeline);
         }
@@ -450,6 +450,9 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                 "; ",
                 pairs.Select(pair =>
                     $"render='{pair.RenderEndpoint.FriendlyName}' ({pair.RenderEndpoint.Id}) -> capture='{pair.CaptureEndpoint.FriendlyName}' ({pair.CaptureEndpoint.Id}) [{pair.MatchReason}]"));
+
+    private bool ShouldUseGeneratedSignalInput() =>
+        config.TestMode.Enabled || OutputConfig.UsesLocalToneProbe(config.Output.Mode);
 
     private async Task LogStatsLoopAsync(
         IAudioInputSource inputSource,
@@ -787,17 +790,23 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                 PairedCaptureEndpointName: outputSnapshot.PairedCaptureEndpointName);
         }
 
-        var summary = string.Equals(config.Output.Mode, OutputConfig.VbCableMode, StringComparison.OrdinalIgnoreCase)
-            ? $"VB-CABLE render '{outputSnapshot.DeviceName ?? "Unknown"}' -> capture '{outputSnapshot.PairedCaptureEndpointName ?? "Unknown"}'."
+        var summary = OutputConfig.UsesLocalToneProbe(config.Output.Mode)
+            ? $"VB-CABLE tone probe render '{outputSnapshot.DeviceName ?? "Unknown"}' -> capture '{outputSnapshot.PairedCaptureEndpointName ?? "Unknown"}'."
+            : OutputConfig.UsesVbCableEndpoint(config.Output.Mode)
+                ? $"VB-CABLE render '{outputSnapshot.DeviceName ?? "Unknown"}' -> capture '{outputSnapshot.PairedCaptureEndpointName ?? "Unknown"}'."
             : string.Equals(config.Output.Mode, OutputConfig.DebugDrainMode, StringComparison.OrdinalIgnoreCase)
                 ? "Debug drain output is active."
                 : $"Playback device '{outputSnapshot.DeviceName ?? "System Default"}' is ready.";
+
+        var detail = OutputConfig.UsesVbCableEndpoint(config.Output.Mode) && ShouldUseGeneratedSignalInput()
+            ? $"Sink={outputSnapshot.SinkKind}, Format={outputSnapshot.OutputFormat}, TargetLatencyMs={config.Output.TargetLatencyMs}, LocalToneHz={config.TestMode.SignalFrequencyHz}, ReceiverBypassed=true"
+            : $"Sink={outputSnapshot.SinkKind}, Format={outputSnapshot.OutputFormat}, TargetLatencyMs={config.Output.TargetLatencyMs}";
 
         return new OutputReadinessSnapshot(
             OutputReadinessState.Ready,
             IsReady: true,
             Summary: summary,
-            Detail: $"Sink={outputSnapshot.SinkKind}, Format={outputSnapshot.OutputFormat}, TargetLatencyMs={config.Output.TargetLatencyMs}",
+            Detail: detail,
             Mode: config.Output.Mode,
             DeviceName: outputSnapshot.DeviceName,
             EndpointId: outputSnapshot.EndpointId,
@@ -831,6 +840,14 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                 HostDiagnosticSeverity.Information,
                 "Manual Connect",
                 $"Use {manualConnect.ConnectionHost}:{manualConnect.ControlPort} from the iPhone client for {manualConnect.TransportMode} mode."));
+        }
+
+        if (OutputConfig.UsesVbCableEndpoint(config.Output.Mode) && ShouldUseGeneratedSignalInput())
+        {
+            diagnostics.Add(new HostDiagnosticItem(
+                HostDiagnosticSeverity.Information,
+                "VB-CABLE Tone Probe",
+                $"Local tone probe is active at {config.TestMode.SignalFrequencyHz} Hz. The receiver is bypassed so this run isolates the VB-CABLE render/capture path."));
         }
 
         if (readiness.State is HostReadinessState.Ready or HostReadinessState.Streaming)
@@ -982,10 +999,27 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             ["maxLateFrameToleranceFrames"] = config.Robustness.MaxLateFrameToleranceFrames,
             ["missingFrameGraceMs"] = config.Robustness.MissingFrameGraceMs,
             ["concealMissingFramesWithSilence"] = config.Robustness.ConcealMissingFramesWithSilence,
-            ["generatedSignalTestMode"] = config.TestMode.Enabled,
+            ["generatedSignalTestMode"] = ShouldUseGeneratedSignalInput(),
+            ["localToneProbeMode"] = OutputConfig.UsesLocalToneProbe(config.Output.Mode),
+            ["generatedSignalFrequencyHz"] = ShouldUseGeneratedSignalInput()
+                ? config.TestMode.SignalFrequencyHz
+                : null,
             ["recommendedIpv4Address"] = manualConnect.RecommendedIpv4Address,
             ["availableIpv4Addresses"] = manualConnect.AvailableIpv4Addresses
         });
+
+        if (OutputConfig.UsesVbCableEndpoint(config.Output.Mode) && ShouldUseGeneratedSignalInput())
+        {
+            logger.Info("vb_cable_tone_probe_active", "VB-CABLE local tone probe is active; the receiver is bypassed.", new Dictionary<string, object?>
+            {
+                ["outputMode"] = config.Output.Mode,
+                ["signalFrequencyHz"] = config.TestMode.SignalFrequencyHz,
+                ["outputEndpointId"] = outputSnapshot.EndpointId,
+                ["outputDeviceName"] = outputSnapshot.DeviceName,
+                ["captureEndpointId"] = outputSnapshot.PairedCaptureEndpointId,
+                ["captureEndpointName"] = outputSnapshot.PairedCaptureEndpointName
+            });
+        }
     }
 
     private void LogSessionSnapshot(

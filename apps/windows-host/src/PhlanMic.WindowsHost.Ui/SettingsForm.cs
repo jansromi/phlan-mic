@@ -87,7 +87,7 @@ internal sealed class SettingsForm : Form
         payloadCodecComboBox = CreateComboBox("RawPcm16");
         keepAliveNumeric = CreateNumericUpDown(1, 60_000);
         sessionTimeoutNumeric = CreateNumericUpDown(1, 120_000);
-        outputModeComboBox = CreateComboBox(OutputConfig.VbCableMode, OutputConfig.DebugDrainMode, OutputConfig.WaveOutMode);
+        outputModeComboBox = CreateComboBox(OutputConfig.VbCableMode, OutputConfig.VbCableToneProbeMode, OutputConfig.DebugDrainMode, OutputConfig.WaveOutMode);
         waveOutDeviceComboBox = CreateComboBox();
         vbCableEndpointComboBox = CreateComboBox();
         outputLatencyNumeric = CreateNumericUpDown(1, 10_000);
@@ -104,7 +104,7 @@ internal sealed class SettingsForm : Form
         channelsNumeric = CreateNumericUpDown(1, 8);
         bitsPerSampleComboBox = CreateComboBox("16");
         frameDurationNumeric = CreateNumericUpDown(1, 1_000);
-        testModeEnabledCheckBox = new CheckBox { AutoSize = true, Text = "Enable generated signal test mode" };
+        testModeEnabledCheckBox = new CheckBox { AutoSize = true, Text = "Enable local tone input (bypasses receiver)" };
         signalFrequencyNumeric = CreateNumericUpDown(1, 50_000);
         saveButton = new Button { AutoSize = true, Text = "Save" };
         var cancelButton = new Button { AutoSize = true, DialogResult = DialogResult.Cancel, Text = "Cancel" };
@@ -249,8 +249,8 @@ internal sealed class SettingsForm : Form
         AddRow(layout, ref row, "Channels", channelsNumeric);
         AddRow(layout, ref row, "Bits Per Sample", bitsPerSampleComboBox);
         AddRow(layout, ref row, "Frame Duration (ms)", frameDurationNumeric);
-        AddRow(layout, ref row, "Test Mode", testModeEnabledCheckBox);
-        AddRow(layout, ref row, "Signal Frequency (Hz)", signalFrequencyNumeric);
+        AddRow(layout, ref row, "Local Tone Input", testModeEnabledCheckBox);
+        AddRow(layout, ref row, "Tone Frequency (Hz)", signalFrequencyNumeric);
         return WrapScrollable(layout);
     }
 
@@ -381,14 +381,21 @@ internal sealed class SettingsForm : Form
     {
         var transportMode = (string?)transportModeComboBox.SelectedItem ?? ReceiverConfig.DebugTcpRawPcmTransportMode;
         var outputMode = (string?)outputModeComboBox.SelectedItem ?? OutputConfig.VbCableMode;
+        var localToneProbeMode = OutputConfig.UsesLocalToneProbe(outputMode);
 
         audioPortNumeric.Enabled = string.Equals(transportMode, ReceiverConfig.UdpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase) &&
             !autoAudioPortCheckBox.Checked;
         autoAudioPortCheckBox.Enabled = string.Equals(transportMode, ReceiverConfig.UdpRawPcmTransportMode, StringComparison.OrdinalIgnoreCase);
 
-        waveOutDeviceComboBox.Enabled = string.Equals(outputMode, OutputConfig.WaveOutMode, StringComparison.OrdinalIgnoreCase);
-        vbCableEndpointComboBox.Enabled = string.Equals(outputMode, OutputConfig.VbCableMode, StringComparison.OrdinalIgnoreCase);
-        signalFrequencyNumeric.Enabled = testModeEnabledCheckBox.Checked;
+        waveOutDeviceComboBox.Enabled = OutputConfig.UsesWaveOutDevice(outputMode);
+        vbCableEndpointComboBox.Enabled = OutputConfig.UsesVbCableEndpoint(outputMode);
+        if (localToneProbeMode)
+        {
+            testModeEnabledCheckBox.Checked = true;
+        }
+
+        testModeEnabledCheckBox.Enabled = !localToneProbeMode;
+        signalFrequencyNumeric.Enabled = localToneProbeMode || testModeEnabledCheckBox.Checked;
     }
 
     private void SaveAndClose()

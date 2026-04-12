@@ -5,6 +5,7 @@ public sealed record OutputConfig
     public const string WaveOutMode = "WaveOut";
     public const string DebugDrainMode = "DebugDrain";
     public const string VbCableMode = "VbCable";
+    public const string VbCableToneProbeMode = "VbCableToneProbe";
 
     public string Mode { get; init; } = VbCableMode;
 
@@ -18,6 +19,16 @@ public sealed record OutputConfig
 
     public bool LogEndpointInventory { get; init; } = true;
 
+    public static bool UsesWaveOutDevice(string? mode) =>
+        string.Equals(mode, WaveOutMode, StringComparison.OrdinalIgnoreCase);
+
+    public static bool UsesVbCableEndpoint(string? mode) =>
+        string.Equals(mode, VbCableMode, StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(mode, VbCableToneProbeMode, StringComparison.OrdinalIgnoreCase);
+
+    public static bool UsesLocalToneProbe(string? mode) =>
+        string.Equals(mode, VbCableToneProbeMode, StringComparison.OrdinalIgnoreCase);
+
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(Mode))
@@ -27,7 +38,8 @@ public sealed record OutputConfig
 
         if (!string.Equals(Mode, WaveOutMode, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(Mode, DebugDrainMode, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(Mode, VbCableMode, StringComparison.OrdinalIgnoreCase))
+            !string.Equals(Mode, VbCableMode, StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(Mode, VbCableToneProbeMode, StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
                 $"Output mode '{Mode}' is not supported in Phase 3.");
@@ -48,12 +60,12 @@ public sealed record OutputConfig
             throw new InvalidOperationException("Output target latency must be greater than zero.");
         }
 
-        if (string.Equals(Mode, WaveOutMode, StringComparison.OrdinalIgnoreCase) && EndpointId is not null)
+        if (!UsesVbCableEndpoint(Mode) && EndpointId is not null)
         {
-            throw new InvalidOperationException("Output endpoint id can only be used with VbCable mode.");
+            throw new InvalidOperationException("Output endpoint id can only be used with VB-CABLE output modes.");
         }
 
-        if (!string.Equals(Mode, WaveOutMode, StringComparison.OrdinalIgnoreCase) && DeviceId != -1)
+        if (!UsesWaveOutDevice(Mode) && DeviceId != -1)
         {
             throw new InvalidOperationException("Output device id can only be used with WaveOut mode.");
         }

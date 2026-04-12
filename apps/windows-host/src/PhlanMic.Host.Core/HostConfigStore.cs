@@ -89,8 +89,8 @@ public sealed class HostConfigStore
         ArgumentNullException.ThrowIfNull(config);
 
         var outputMode = config.Output.Mode;
-        var isWaveOut = string.Equals(outputMode, OutputConfig.WaveOutMode, StringComparison.OrdinalIgnoreCase);
-        var isVbCable = string.Equals(outputMode, OutputConfig.VbCableMode, StringComparison.OrdinalIgnoreCase);
+        var isWaveOut = OutputConfig.UsesWaveOutDevice(outputMode);
+        var isVbCable = OutputConfig.UsesVbCableEndpoint(outputMode);
 
         return config with
         {
