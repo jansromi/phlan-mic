@@ -226,7 +226,9 @@ public sealed class StructuredConsoleLogger
                 $"completed={FormatProperty(properties, "outputCompletedFrames")}",
                 $"underruns={FormatProperty(properties, "underrunCount")}",
                 $"latencyMs={FormatProperty(properties, "estimatedLatencyMs")}",
-                $"glitchRate={FormatProperty(properties, "glitchRatePerMinute")}"
+                $"glitchRate={FormatProperty(properties, "glitchRatePerMinute")}",
+                $"renderSignal={FormatProperty(properties, "outputSignalPeak")}/{FormatProperty(properties, "outputSignalRms")}/{FormatProperty(properties, "outputSignalDetected")}",
+                $"captureProbe={FormatProperty(properties, "captureProbeState")}:{FormatProperty(properties, "captureProbeSignalPeak")}/{FormatProperty(properties, "captureProbeSignalRms")}/{FormatProperty(properties, "captureProbeSignalDetected")}"
             });
 
         return $"input[{input}] robustness[{robustness}] output[{output}]";
@@ -270,7 +272,9 @@ public sealed class StructuredConsoleLogger
                 $"submitted={FormatProperty(properties, "outputSubmittedFrames")}",
                 $"completed={FormatProperty(properties, "outputCompletedFrames")}",
                 $"underruns={FormatProperty(properties, "underrunCount")}",
-                $"latencyMs={FormatProperty(properties, "estimatedLatencyMs")}"
+                $"latencyMs={FormatProperty(properties, "estimatedLatencyMs")}",
+                $"renderSignal={FormatProperty(properties, "outputSignalPeak")}/{FormatProperty(properties, "outputSignalRms")}/{FormatProperty(properties, "outputSignalDetected")}",
+                $"captureProbe={FormatProperty(properties, "captureProbeState")}:{FormatProperty(properties, "captureProbeSignalPeak")}/{FormatProperty(properties, "captureProbeSignalRms")}/{FormatProperty(properties, "captureProbeSignalDetected")}"
             });
 
         return $"{session} input[{input}] output[{output}]";

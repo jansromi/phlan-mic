@@ -13,6 +13,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
     private readonly VbCableEndpointPair selectedPair;
     private readonly object gate = new();
     private readonly Pcm16AudioLevelMeter signalMeter = new();
+    private readonly VbCableCaptureProbe captureProbe;
     private CoreAudioInterop.IAudioClient? audioClient;
     private CoreAudioInterop.IAudioRenderClient? renderClient;
     private PreparedOutputFrame? currentFrame;
@@ -59,6 +60,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
         this.selectedPair = selectedPair;
 
         InitializeAudioClient(inputFormat);
+        captureProbe = new VbCableCaptureProbe(logger, selectedPair.CaptureEndpoint, outputFormat, config.TargetLatencyMs);
 
         logger.Info("audio_output_selected", "Configured VB-CABLE playback output.", new Dictionary<string, object?>
         {
@@ -68,6 +70,8 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
             ["captureEndpointName"] = selectedPair.CaptureEndpoint.FriendlyName,
             ["inputFormat"] = DescribeFormat(inputFormat),
             ["outputFormat"] = DescribeFormat(outputFormat),
+            ["captureProbeState"] = captureProbe.State,
+            ["captureProbeFormat"] = captureProbe.CaptureFormat,
             ["formatConversionActive"] = formatConversionActive,
             ["bufferCount"] = bufferCount,
             ["targetLatencyMs"] = config.TargetLatencyMs,
@@ -83,6 +87,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
         lock (gate)
         {
             var observedAtUtc = DateTimeOffset.UtcNow;
+            var captureProbeSnapshot = captureProbe.GetSnapshot(observedAtUtc);
             var outstandingBytes = (long)paddingFrames * bytesPerDeviceFrame;
             var bufferedDeviceFrames = outputFormat.BytesPerFrame > 0
                 ? (int)Math.Ceiling(outstandingBytes / (double)outputFormat.BytesPerFrame)
@@ -116,7 +121,12 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
                 LastFrameCapturedAtUtc: lastFrameCapturedAtUtc,
                 LastSubmittedAtUtc: lastSubmittedAtUtc,
                 LastCompletedAtUtc: lastCompletedAtUtc,
-                SignalMeter: signalMeter.GetSnapshot(observedAtUtc));
+                SignalMeter: signalMeter.GetSnapshot(observedAtUtc),
+                CaptureProbeState: captureProbeSnapshot.State,
+                CaptureProbeFormat: captureProbeSnapshot.Format,
+                CaptureProbeObservedBytes: captureProbeSnapshot.ObservedBytes,
+                CaptureProbeLastObservedAtUtc: captureProbeSnapshot.LastObservedAtUtc,
+                CaptureProbeSignalMeter: captureProbeSnapshot.SignalMeter);
         }
     }
 
@@ -141,6 +151,8 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
                 {
                     await Task.Delay(ActivePollDelay, cancellationToken);
                 }
+
+                captureProbe.Poll();
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -160,7 +172,9 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
                 ["completedFrames"] = snapshot.CompletedFrames,
                 ["completedBytes"] = snapshot.CompletedBytes,
                 ["silenceFramesInserted"] = snapshot.SilenceFramesInserted,
-                ["underrunCount"] = snapshot.UnderrunCount
+                ["underrunCount"] = snapshot.UnderrunCount,
+                ["captureProbeState"] = snapshot.CaptureProbeState,
+                ["captureProbeObservedBytes"] = snapshot.CaptureProbeObservedBytes
             });
         }
     }
@@ -173,6 +187,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
         }
 
         disposed = true;
+        captureProbe.Dispose();
 
         if (audioClient is not null)
         {
@@ -261,6 +276,7 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
 
         WriteFramesToDevice(bufferFrameCapacity, allowSilence: true);
         CoreAudioInterop.ThrowIfFailed(audioClient!.Start(), "IAudioClient.Start");
+        captureProbe.StartIfNeeded();
 
         lock (gate)
         {
@@ -277,6 +293,8 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
             ["captureEndpointId"] = selectedPair.CaptureEndpoint.Id,
             ["captureEndpointName"] = selectedPair.CaptureEndpoint.FriendlyName,
             ["outputFormat"] = DescribeFormat(outputFormat),
+            ["captureProbeState"] = captureProbe.State,
+            ["captureProbeFormat"] = captureProbe.CaptureFormat,
             ["bufferCount"] = bufferCount,
             ["streamRobustnessState"] = robustness.State.ToString(),
             ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth,

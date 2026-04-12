@@ -25,7 +25,12 @@ public sealed record AudioOutputSnapshot(
     DateTimeOffset? LastFrameCapturedAtUtc,
     DateTimeOffset? LastSubmittedAtUtc,
     DateTimeOffset? LastCompletedAtUtc,
-    AudioLevelMeterSnapshot SignalMeter)
+    AudioLevelMeterSnapshot SignalMeter,
+    string? CaptureProbeState,
+    string? CaptureProbeFormat,
+    long CaptureProbeObservedBytes,
+    DateTimeOffset? CaptureProbeLastObservedAtUtc,
+    AudioLevelMeterSnapshot CaptureProbeSignalMeter)
 {
     public static AudioOutputSnapshot Empty(string sinkKind) => new(
         sinkKind,
@@ -49,6 +54,11 @@ public sealed record AudioOutputSnapshot(
         null,
         null,
         null,
+        null,
+        AudioLevelMeterSnapshot.Empty,
+        null,
+        null,
+        0,
         null,
         AudioLevelMeterSnapshot.Empty);
 }

@@ -48,7 +48,12 @@ internal sealed class DebugPipelineDrain
                 LastFrameCapturedAtUtc: lastFrameCapturedAtUtc,
                 LastSubmittedAtUtc: lastDrainedAtUtc,
                 LastCompletedAtUtc: lastDrainedAtUtc,
-                SignalMeter: signalMeter.GetSnapshot(observedAtUtc));
+                SignalMeter: signalMeter.GetSnapshot(observedAtUtc),
+                CaptureProbeState: null,
+                CaptureProbeFormat: null,
+                CaptureProbeObservedBytes: 0,
+                CaptureProbeLastObservedAtUtc: null,
+                CaptureProbeSignalMeter: AudioLevelMeterSnapshot.Empty);
         }
     }
 

@@ -520,7 +520,8 @@ internal sealed class MainForm : Form
 
     private static string BuildOutputText(WindowsHostRuntimeSnapshot snapshot)
     {
-        var signalMeter = snapshot.AudioOutput.SignalMeter;
+        var renderSignalMeter = snapshot.AudioOutput.SignalMeter;
+        var captureProbeSignalMeter = snapshot.AudioOutput.CaptureProbeSignalMeter;
         var builder = new StringBuilder()
             .AppendLine($"Mode: {snapshot.Output.Mode}")
             .AppendLine($"State: {snapshot.Output.State}")
@@ -540,7 +541,11 @@ internal sealed class MainForm : Form
             .AppendLine($"Estimated Latency Ms: {snapshot.AudioOutput.EstimatedLatencyMs:F1}")
             .AppendLine($"Underruns: {snapshot.AudioOutput.UnderrunCount}")
             .AppendLine($"Glitch Rate / Min: {snapshot.AudioOutput.GlitchRatePerMinute:F2}")
-            .AppendLine($"Signal Peak / RMS: {FormatPercent(signalMeter.DisplayPeakNormalized)} / {FormatPercent(signalMeter.RmsNormalized)}");
+            .AppendLine($"Render Signal Peak / RMS: {FormatPercent(renderSignalMeter.DisplayPeakNormalized)} / {FormatPercent(renderSignalMeter.RmsNormalized)}")
+            .AppendLine($"Capture Probe State: {snapshot.AudioOutput.CaptureProbeState ?? "n/a"}")
+            .AppendLine($"Capture Probe Format: {snapshot.AudioOutput.CaptureProbeFormat ?? "n/a"}")
+            .AppendLine($"Capture Probe Peak / RMS: {FormatPercent(captureProbeSignalMeter.DisplayPeakNormalized)} / {FormatPercent(captureProbeSignalMeter.RmsNormalized)}")
+            .AppendLine($"Capture Probe Observed: {snapshot.AudioOutput.CaptureProbeObservedBytes} bytes at {FormatTimestamp(snapshot.AudioOutput.CaptureProbeLastObservedAtUtc)}");
 
         return builder.ToString().TrimEnd();
     }

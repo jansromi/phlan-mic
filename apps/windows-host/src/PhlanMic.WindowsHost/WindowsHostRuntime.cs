@@ -463,6 +463,7 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
         long lastLateFramesDropped = 0;
         long lastMissingFramesDetected = 0;
         long lastLiveEdgeRecoveryCount = 0;
+        bool? lastVbCableProbeMismatch = null;
         var nextStatsLogAtUtc = DateTimeOffset.UtcNow;
 
         try
@@ -534,7 +535,17 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                         ["lastOutputSequenceNumber"] = outputSnapshot.LastSequenceNumber,
                         ["lastFrameCapturedAtUtc"] = outputSnapshot.LastFrameCapturedAtUtc,
                         ["lastFrameSubmittedAtUtc"] = outputSnapshot.LastSubmittedAtUtc,
-                        ["lastFrameCompletedAtUtc"] = outputSnapshot.LastCompletedAtUtc
+                        ["lastFrameCompletedAtUtc"] = outputSnapshot.LastCompletedAtUtc,
+                        ["outputSignalDetected"] = outputSnapshot.SignalMeter.SignalDetected,
+                        ["outputSignalRms"] = outputSnapshot.SignalMeter.RmsNormalized,
+                        ["outputSignalPeak"] = outputSnapshot.SignalMeter.DisplayPeakNormalized,
+                        ["captureProbeState"] = outputSnapshot.CaptureProbeState,
+                        ["captureProbeFormat"] = outputSnapshot.CaptureProbeFormat,
+                        ["captureProbeObservedBytes"] = outputSnapshot.CaptureProbeObservedBytes,
+                        ["captureProbeLastObservedAtUtc"] = outputSnapshot.CaptureProbeLastObservedAtUtc,
+                        ["captureProbeSignalDetected"] = outputSnapshot.CaptureProbeSignalMeter.SignalDetected,
+                        ["captureProbeSignalRms"] = outputSnapshot.CaptureProbeSignalMeter.RmsNormalized,
+                        ["captureProbeSignalPeak"] = outputSnapshot.CaptureProbeSignalMeter.DisplayPeakNormalized
                     });
                     nextStatsLogAtUtc = observedAtUtc + StatsLogInterval;
                 }
@@ -649,6 +660,46 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
                         ["highestBufferedSequence"] = robustness.HighestBufferedSequence,
                         ["currentPrebufferDepth"] = robustness.CurrentPrebufferDepth
                     });
+                }
+
+                var vbCableProbeMismatch =
+                    string.Equals(outputSnapshot.SinkKind, "VbCable", StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(outputSnapshot.CaptureProbeState, "Active", StringComparison.OrdinalIgnoreCase) &&
+                    outputSnapshot.SignalMeter.SignalDetected &&
+                    !outputSnapshot.CaptureProbeSignalMeter.SignalDetected;
+
+                if (lastVbCableProbeMismatch != vbCableProbeMismatch)
+                {
+                    if (vbCableProbeMismatch)
+                    {
+                        logger.Warning("vb_cable_capture_probe_silent", "VB-CABLE render signal is present, but the paired capture probe is not seeing signal.", new Dictionary<string, object?>
+                        {
+                            ["outputDeviceName"] = outputSnapshot.DeviceName,
+                            ["outputEndpointId"] = outputSnapshot.EndpointId,
+                            ["captureEndpointName"] = outputSnapshot.PairedCaptureEndpointName,
+                            ["captureEndpointId"] = outputSnapshot.PairedCaptureEndpointId,
+                            ["outputSignalRms"] = outputSnapshot.SignalMeter.RmsNormalized,
+                            ["outputSignalPeak"] = outputSnapshot.SignalMeter.DisplayPeakNormalized,
+                            ["captureProbeState"] = outputSnapshot.CaptureProbeState,
+                            ["captureProbeSignalRms"] = outputSnapshot.CaptureProbeSignalMeter.RmsNormalized,
+                            ["captureProbeSignalPeak"] = outputSnapshot.CaptureProbeSignalMeter.DisplayPeakNormalized,
+                            ["captureProbeObservedBytes"] = outputSnapshot.CaptureProbeObservedBytes,
+                            ["captureProbeLastObservedAtUtc"] = outputSnapshot.CaptureProbeLastObservedAtUtc
+                        });
+                    }
+                    else if (lastVbCableProbeMismatch == true)
+                    {
+                        logger.Info("vb_cable_capture_probe_signal_detected", "VB-CABLE paired capture probe is seeing signal again.", new Dictionary<string, object?>
+                        {
+                            ["outputDeviceName"] = outputSnapshot.DeviceName,
+                            ["captureEndpointName"] = outputSnapshot.PairedCaptureEndpointName,
+                            ["captureProbeState"] = outputSnapshot.CaptureProbeState,
+                            ["captureProbeSignalRms"] = outputSnapshot.CaptureProbeSignalMeter.RmsNormalized,
+                            ["captureProbeSignalPeak"] = outputSnapshot.CaptureProbeSignalMeter.DisplayPeakNormalized
+                        });
+                    }
+
+                    lastVbCableProbeMismatch = vbCableProbeMismatch;
                 }
 
                 lastDroppedFrames = stats.DroppedFrames;
@@ -1052,7 +1103,17 @@ public sealed class WindowsHostRuntime : IAsyncDisposable
             ["outputStartedAtUtc"] = outputStats.StartedAtUtc,
             ["lastFrameCapturedAtUtc"] = outputStats.LastFrameCapturedAtUtc,
             ["lastFrameSubmittedAtUtc"] = outputStats.LastSubmittedAtUtc,
-            ["lastFrameCompletedAtUtc"] = outputStats.LastCompletedAtUtc
+            ["lastFrameCompletedAtUtc"] = outputStats.LastCompletedAtUtc,
+            ["outputSignalDetected"] = outputStats.SignalMeter.SignalDetected,
+            ["outputSignalRms"] = outputStats.SignalMeter.RmsNormalized,
+            ["outputSignalPeak"] = outputStats.SignalMeter.DisplayPeakNormalized,
+            ["captureProbeState"] = outputStats.CaptureProbeState,
+            ["captureProbeFormat"] = outputStats.CaptureProbeFormat,
+            ["captureProbeObservedBytes"] = outputStats.CaptureProbeObservedBytes,
+            ["captureProbeLastObservedAtUtc"] = outputStats.CaptureProbeLastObservedAtUtc,
+            ["captureProbeSignalDetected"] = outputStats.CaptureProbeSignalMeter.SignalDetected,
+            ["captureProbeSignalRms"] = outputStats.CaptureProbeSignalMeter.RmsNormalized,
+            ["captureProbeSignalPeak"] = outputStats.CaptureProbeSignalMeter.DisplayPeakNormalized
         });
     }
 

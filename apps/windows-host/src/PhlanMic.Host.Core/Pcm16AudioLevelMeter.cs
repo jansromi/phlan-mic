@@ -37,6 +37,27 @@ public sealed class Pcm16AudioLevelMeter
             throw new InvalidOperationException("PCM16 level metering only supports 16-bit signed PCM frames.");
         }
 
+        ObserveSamples(format, payload, observedAtUtc);
+    }
+
+    public void ObserveSamples(AudioFormat format, ReadOnlySpan<byte> payload, DateTimeOffset observedAtUtc)
+    {
+        ArgumentNullException.ThrowIfNull(format);
+        format.Validate();
+
+        if (format.BitsPerSample is not 16)
+        {
+            throw new InvalidOperationException("PCM16 level metering only supports 16-bit signed PCM frames.");
+        }
+
+        var blockAlign = format.Channels * format.BytesPerSample;
+        if (blockAlign <= 0 || payload.Length % blockAlign != 0)
+        {
+            throw new ArgumentException(
+                $"PCM16 level meter expected payload aligned to {blockAlign} bytes but received {payload.Length}.",
+                nameof(payload));
+        }
+
         ApplyDisplayDecay(observedAtUtc);
 
         if (payload.Length == 0)

@@ -115,7 +115,12 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
                 LastFrameCapturedAtUtc: lastFrameCapturedAtUtc,
                 LastSubmittedAtUtc: lastSubmittedAtUtc,
                 LastCompletedAtUtc: lastCompletedAtUtc,
-                SignalMeter: signalMeter.GetSnapshot(observedAtUtc));
+                SignalMeter: signalMeter.GetSnapshot(observedAtUtc),
+                CaptureProbeState: null,
+                CaptureProbeFormat: null,
+                CaptureProbeObservedBytes: 0,
+                CaptureProbeLastObservedAtUtc: null,
+                CaptureProbeSignalMeter: AudioLevelMeterSnapshot.Empty);
         }
     }
 

@@ -18,6 +18,8 @@ internal static class CoreAudioInterop
 
     public static Guid IAudioRenderClientIid { get; } = new("F294ACFC-3146-4483-A7BF-ADDCA7C260E2");
 
+    public static Guid IAudioCaptureClientIid { get; } = new("C8ADBD64-E71E-48A0-A4DE-185C395CD317");
+
     public static PROPERTYKEY DeviceFriendlyNamePropertyKey { get; } =
         new(new Guid("A45C254E-DF1C-4EFD-8020-67D146A850E0"), 14);
 
@@ -256,5 +258,25 @@ internal static class CoreAudioInterop
 
         [PreserveSig]
         int ReleaseBuffer(uint writtenFrameCount, uint flags);
+    }
+
+    [ComImport]
+    [Guid("C8ADBD64-E71E-48A0-A4DE-185C395CD317")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    internal interface IAudioCaptureClient
+    {
+        [PreserveSig]
+        int GetBuffer(
+            out IntPtr dataPointer,
+            out uint frameCount,
+            out uint flags,
+            out ulong devicePosition,
+            out ulong qpcPosition);
+
+        [PreserveSig]
+        int ReleaseBuffer(uint frameCount);
+
+        [PreserveSig]
+        int GetNextPacketSize(out uint nextPacketFrameCount);
     }
 }
