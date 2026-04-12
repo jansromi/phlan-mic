@@ -2,13 +2,37 @@ import SwiftUI
 
 private enum SessionLayout {
     static let panelWidth: CGFloat = 360
+    static let panelCornerRadius: CGFloat = 22
+    static let tileCornerRadius: CGFloat = 16
+    static let panelPadding: CGFloat = 18
+}
+
+private enum AppTypography {
+    static let primaryStatus = Font.system(size: 30, weight: .bold, design: .rounded)
+    static let cardTitle = Font.system(size: 17, weight: .semibold, design: .rounded)
+    static let sectionLabel = Font.system(size: 12, weight: .semibold, design: .rounded)
+    static let metricLabel = Font.system(size: 13, weight: .semibold, design: .rounded)
+    static let metricValue = Font.system(size: 15, weight: .semibold, design: .rounded)
+    static let detail = Font.system(size: 13, weight: .medium, design: .rounded)
+    static let badge = Font.system(size: 12, weight: .semibold, design: .rounded)
+    static let largeValue = Font.system(size: 28, weight: .bold, design: .rounded)
 }
 
 private enum AppPalette {
-    static let appBackground = Color(uiColor: .systemGroupedBackground)
-    static let panelBackground = Color(uiColor: .secondarySystemBackground)
-    static let tileBackground = Color(uiColor: .tertiarySystemBackground)
-    static let panelBorder = Color(uiColor: .separator).opacity(0.18)
+    static let backgroundTop = Color(.sRGB, red: 0.94, green: 0.96, blue: 0.99)
+    static let backgroundBottom = Color(.sRGB, red: 0.84, green: 0.88, blue: 0.94)
+    static let backgroundGlow = Color.white.opacity(0.42)
+    static let panelBackgroundTop = Color(.sRGB, red: 0.985, green: 0.99, blue: 0.995)
+    static let panelBackgroundBottom = Color(.sRGB, red: 0.90, green: 0.93, blue: 0.97)
+    static let tileBackgroundTop = Color(.sRGB, red: 0.955, green: 0.968, blue: 0.985)
+    static let tileBackgroundBottom = Color(.sRGB, red: 0.88, green: 0.91, blue: 0.95)
+    static let panelBorder = slate.opacity(0.14)
+    static let tileBorder = slate.opacity(0.10)
+    static let panelShadow = Color.black.opacity(0.10)
+    static let meterTrack = Color(.sRGB, red: 0.12, green: 0.18, blue: 0.26).opacity(0.10)
+    static let textPrimary = Color(.sRGB, red: 0.12, green: 0.17, blue: 0.24)
+    static let textSecondary = Color(.sRGB, red: 0.29, green: 0.36, blue: 0.45)
+    static let textMuted = Color(.sRGB, red: 0.42, green: 0.48, blue: 0.57)
     static let meterLow = Color(.sRGB, red: 0.16, green: 0.55, blue: 0.76)
     static let meterMid = Color(.sRGB, red: 0.29, green: 0.70, blue: 0.40)
     static let statusOrange = Color(.sRGB, red: 0.96, green: 0.52, blue: 0.12)
@@ -32,10 +56,10 @@ struct ContentView: View {
             ZStack {
                 SessionBackground()
 
-                VStack(spacing: 28) {
-                    Spacer(minLength: 24)
+                VStack(spacing: 22) {
+                    Spacer(minLength: 20)
 
-                    VStack(spacing: 18) {
+                    VStack(spacing: 16) {
                         Button {
                             Task {
                                 await model.handlePrimaryMicTap()
@@ -51,7 +75,8 @@ struct ContentView: View {
                                 isConnecting: shouldAnimateConnectingLabel(for: model.primaryStatusTitle),
                                 step: connectingTextStep
                             )
-                                .font(.system(size: 28, weight: .bold, design: .rounded))
+                                .font(AppTypography.primaryStatus)
+                                .foregroundStyle(AppPalette.textPrimary)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -62,7 +87,7 @@ struct ContentView: View {
                     Spacer()
                 }
                 .padding(.horizontal, 24)
-                .padding(.top, 12)
+                .padding(.top, 16)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -74,7 +99,7 @@ struct ContentView: View {
                     } label: {
                         Image(systemName: "line.3.horizontal")
                             .font(.title3.weight(.semibold))
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(AppPalette.textPrimary)
                             .frame(width: 36, height: 36)
                     }
                 }
@@ -159,8 +184,26 @@ private struct AnimatedConnectingLabel: View {
 
 private struct SessionBackground: View {
     var body: some View {
-        AppPalette.appBackground
-            .ignoresSafeArea()
+        ZStack {
+            LinearGradient(
+                colors: [AppPalette.backgroundTop, AppPalette.backgroundBottom],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            Circle()
+                .fill(AppPalette.backgroundGlow)
+                .frame(width: 280, height: 280)
+                .blur(radius: 70)
+                .offset(x: -110, y: -280)
+
+            Circle()
+                .fill(AppPalette.statusBlue.opacity(0.12))
+                .frame(width: 240, height: 240)
+                .blur(radius: 84)
+                .offset(x: 150, y: 260)
+        }
+        .ignoresSafeArea()
     }
 }
 
@@ -199,30 +242,17 @@ private struct InputMeterPanel: View {
     @State private var isExpanded = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isExpanded.toggle()
+        VStack(alignment: .leading, spacing: 14) {
+            if isExpanded {
+                Button {
+                    toggleExpanded()
+                } label: {
+                    headerContent
                 }
-            } label: {
-                HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Input Meter")
-                            .font(.headline)
-
-                        Text(isExpanded ? "Average, peak, and capture gain." : "Tap to expand gain and detailed meters.")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
+                .buttonStyle(.plain)
+            } else {
+                headerContent
             }
-            .buttonStyle(.plain)
 
             LevelMeterRow(
                 label: "Average",
@@ -243,15 +273,17 @@ private struct InputMeterPanel: View {
                     HStack(alignment: .firstTextBaseline) {
                         Text("Mic Gain")
                             .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppPalette.textPrimary)
 
                         Spacer()
 
                         Text(model.micGainLabel)
                             .font(.subheadline.monospacedDigit())
+                            .foregroundStyle(AppPalette.textPrimary)
 
                         Text("(\(model.micGainDecibelsLabel))")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(AppPalette.textSecondary)
                     }
 
                     Slider(
@@ -264,13 +296,17 @@ private struct InputMeterPanel: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .padding(20)
+        .padding(SessionLayout.panelPadding)
         .frame(maxWidth: SessionLayout.panelWidth)
-        .background(AppPalette.panelBackground, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(AppPalette.panelBorder, lineWidth: 1)
-        )
+        .sessionCard()
+        .contentShape(RoundedRectangle(cornerRadius: SessionLayout.panelCornerRadius, style: .continuous))
+        .onTapGesture {
+            guard !isExpanded else {
+                return
+            }
+
+            toggleExpanded()
+        }
     }
 
     private var micGainBinding: Binding<Double> {
@@ -278,6 +314,49 @@ private struct InputMeterPanel: View {
             get: { Double(model.micGain) },
             set: { model.updateMicGain(Float($0)) }
         )
+    }
+
+    private var headerContent: some View {
+        HStack(spacing: 12) {
+            Text("Input Meter")
+                .font(AppTypography.cardTitle)
+
+            Spacer()
+
+            SummaryBadge(
+                text: "\(model.latestInputLevel.averagePercentage)% · \(model.latestInputLevel.averageDecibels)dB",
+                tint: meterSummaryTint
+            )
+
+            Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                .font(AppTypography.sectionLabel)
+                .foregroundStyle(AppPalette.textSecondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private var meterSummaryTint: Color {
+        StatusTint.color(named: meterSummaryTintName)
+    }
+
+    private var meterSummaryTintName: String {
+        let value = model.latestInputLevel.averageLevel
+        if value > 0.8 {
+            return "red"
+        }
+
+        if value > 0.4 {
+            return "orange"
+        }
+
+        return "green"
+    }
+
+    private func toggleExpanded() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isExpanded.toggle()
+        }
     }
 }
 
@@ -290,27 +369,29 @@ private struct LevelMeterRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text(label)
-                    .font(.subheadline.weight(.semibold))
+                Text(label.uppercased())
+                    .font(AppTypography.sectionLabel)
+                    .foregroundStyle(AppPalette.textSecondary)
                 Spacer()
                 Text("\(percentage)%")
-                    .font(.subheadline.monospacedDigit())
-                Text("(\(decibels) dBFS)")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(AppPalette.textPrimary)
+                    .font(AppTypography.metricValue.monospacedDigit())
+                Text("\(decibels)dB")
+                    .font(AppTypography.detail.monospacedDigit())
+                    .foregroundStyle(AppPalette.textSecondary)
             }
 
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.primary.opacity(0.09))
+                        .fill(AppPalette.meterTrack)
 
                     Capsule()
                         .fill(meterColors.first ?? AppPalette.meterLow)
                         .frame(width: geometry.size.width * CGFloat(max(0, min(value, 1))))
                 }
             }
-            .frame(height: 12)
+            .frame(height: 10)
         }
     }
 
@@ -337,57 +418,53 @@ private struct ConnectionStatusCard: View {
             model.presentHostSettings()
         } label: {
             HStack(alignment: .top, spacing: 14) {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .top, spacing: 8) {
                         HStack(spacing: 8) {
                             Circle()
                                 .fill(StatusTint.color(named: model.connectionCardTintName))
-                                .frame(width: 10, height: 10)
+                                .frame(width: 8, height: 8)
 
                             AnimatedConnectingLabel(
                                 text: model.connectionCardStatusLabel,
                                 isConnecting: isConnecting,
                                 step: connectingStep
                             )
-                                .font(.subheadline.weight(.semibold))
+                                .font(AppTypography.sectionLabel)
                                 .foregroundStyle(StatusTint.color(named: model.connectionCardTintName))
                         }
 
                         Spacer(minLength: 8)
 
-                        Text(model.hostConfiguration.transportMode.label)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(AppPalette.tileBackground, in: Capsule())
+                        SummaryBadge(
+                            text: model.hostConfiguration.transportMode.label,
+                            tint: AppPalette.textSecondary
+                        )
                     }
 
                     Text(model.connectionCardTitle)
-                        .font(.headline)
-                        .foregroundStyle(.primary)
+                        .font(AppTypography.cardTitle)
+                        .foregroundStyle(AppPalette.textPrimary)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Text(model.connectionCardDetail)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.leading)
-                        .lineLimit(2)
+                    if !model.connectionCardDetail.isEmpty {
+                        Text(model.connectionCardDetail)
+                            .font(AppTypography.detail)
+                            .foregroundStyle(AppPalette.textSecondary)
+                            .multilineTextAlignment(.leading)
+                            .lineLimit(2)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 Image(systemName: "slider.horizontal.3")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.secondary)
+                    .font(AppTypography.metricLabel)
+                    .foregroundStyle(AppPalette.textSecondary)
                     .padding(.top, 2)
             }
-            .padding(18)
-            .background(AppPalette.panelBackground, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 26, style: .continuous)
-                    .stroke(AppPalette.panelBorder, lineWidth: 1)
-            )
+            .padding(SessionLayout.panelPadding)
+            .sessionCard(cornerRadius: 20)
         }
         .buttonStyle(.plain)
     }
@@ -399,28 +476,27 @@ private struct SessionHealthPanel: View {
     @State private var selectedItemID: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     isExpanded.toggle()
                 }
             } label: {
                 HStack(spacing: 12) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Session Health")
-                            .font(.headline)
-
-                        Text(model.sessionHealthSummary)
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+                    Text("Session Health")
+                        .font(AppTypography.cardTitle)
+                        .foregroundStyle(AppPalette.textPrimary)
 
                     Spacer()
 
+                    SummaryBadge(
+                        text: headerSummaryText,
+                        tint: AppPalette.textSecondary
+                    )
+
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.subheadline.weight(.bold))
-                        .foregroundStyle(.secondary)
+                        .font(AppTypography.metricLabel)
+                        .foregroundStyle(AppPalette.textSecondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -441,18 +517,14 @@ private struct SessionHealthPanel: View {
 
                 if let footnote = model.sessionHealthFootnote {
                     Text(footnote)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .font(AppTypography.detail)
+                        .foregroundStyle(AppPalette.textSecondary)
                 }
             }
         }
-        .padding(20)
+        .padding(SessionLayout.panelPadding)
         .frame(maxWidth: SessionLayout.panelWidth)
-        .background(AppPalette.panelBackground, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 28, style: .continuous)
-                .stroke(AppPalette.panelBorder, lineWidth: 1)
-        )
+        .sessionCard()
         .sheet(item: selectedHealthItemBinding) { item in
             SessionHealthDetailSheet(item: item)
                 .presentationDetents([.height(220), .medium])
@@ -474,6 +546,15 @@ private struct SessionHealthPanel: View {
             }
         )
     }
+
+    private var headerSummaryText: String {
+        let items = model.sessionHealthItems
+        guard items.count == 3 else {
+            return model.sessionHealthSummary
+        }
+
+        return "\(items[0].value) · \(items[1].value) · \(items[2].value)"
+    }
 }
 
 private struct SessionHealthTile: View {
@@ -486,20 +567,20 @@ private struct SessionHealthTile: View {
                     .fill(StatusTint.color(named: item.tintName))
                     .frame(width: 8, height: 8)
 
-                Text(item.title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                Text(item.title.uppercased())
+                    .font(AppTypography.sectionLabel)
+                    .foregroundStyle(AppPalette.textSecondary)
             }
 
             Text(item.value)
-                .font(.headline.monospacedDigit())
+                .font(AppTypography.metricValue.monospacedDigit())
                 .foregroundStyle(StatusTint.color(named: item.tintName))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(AppPalette.tileBackground, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .tileCard()
     }
 }
 
@@ -514,22 +595,51 @@ private struct SessionHealthDetailSheet: View {
                     .frame(width: 10, height: 10)
 
                 Text(item.detailTitle)
-                    .font(.headline)
+                    .font(AppTypography.cardTitle)
             }
 
             Text(item.value)
-                .font(.system(size: 28, weight: .bold, design: .rounded).monospacedDigit())
+                .font(AppTypography.largeValue.monospacedDigit())
                 .foregroundStyle(StatusTint.color(named: item.tintName))
 
             Text(item.detail)
                 .font(.body)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppPalette.textSecondary)
 
             Spacer(minLength: 0)
         }
         .padding(24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(uiColor: .systemBackground))
+    }
+}
+
+private struct SummaryBadge: View {
+    let text: String
+    let tint: Color
+
+    var body: some View {
+        Text(text)
+            .font(AppTypography.badge.monospacedDigit())
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.85)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [AppPalette.tileBackgroundTop, AppPalette.tileBackgroundBottom],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(AppPalette.tileBorder, lineWidth: 1)
+            )
     }
 }
 
@@ -549,9 +659,11 @@ private struct HostSettingsView: View {
                     tintName: model.setupStatus.tintName
                 )
 
-                Text(model.hostSettingsStatusText)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                if !model.hostSettingsStatusText.isEmpty {
+                    Text(model.hostSettingsStatusText)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
 
                 Text("Windows control/debug port default: \(HostConfiguration.defaultDebugTcpPort)")
                     .font(.footnote)
@@ -834,6 +946,59 @@ private struct MeterRow: View {
                 .tint(value > 0.8 ? AppPalette.statusRed : (value > 0.4 ? AppPalette.statusOrange : AppPalette.statusGreen))
         }
         .padding(.vertical, 2)
+    }
+}
+
+private struct SessionCardModifier: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [AppPalette.panelBackgroundTop, AppPalette.panelBackgroundBottom],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(AppPalette.panelBorder, lineWidth: 1)
+            )
+            .shadow(color: AppPalette.panelShadow, radius: 18, x: 0, y: 10)
+    }
+}
+
+private struct TileCardModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content
+            .background(
+                RoundedRectangle(cornerRadius: SessionLayout.tileCornerRadius, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [AppPalette.tileBackgroundTop, AppPalette.tileBackgroundBottom],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: SessionLayout.tileCornerRadius, style: .continuous)
+                    .stroke(AppPalette.tileBorder, lineWidth: 1)
+            )
+    }
+}
+
+private extension View {
+    func sessionCard(cornerRadius: CGFloat = SessionLayout.panelCornerRadius) -> some View {
+        modifier(SessionCardModifier(cornerRadius: cornerRadius))
+    }
+
+    func tileCard() -> some View {
+        modifier(TileCardModifier())
     }
 }
 

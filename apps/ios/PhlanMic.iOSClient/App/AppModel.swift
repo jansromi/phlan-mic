@@ -625,13 +625,13 @@ final class AppModel: ObservableObject {
 
         switch microphonePermission {
         case .unknown:
-            return "Tap To Enable Mic"
+            return "Mic Access"
         case .denied:
             return "Microphone Blocked"
         case .simulatorUnavailable:
             return "Device Required"
         case .granted:
-            return setupStatus == .ready ? "Tap To Start" : "Host Setup Needed"
+            return setupStatus == .ready ? "Ready" : "Host Setup Needed"
         }
     }
 
@@ -731,7 +731,7 @@ final class AppModel: ObservableObject {
             case .connected:
                 return activeTransportStatusDetail(fallback: "The transport path is ready and the audio pipeline is starting.")
             case .streaming:
-                return "Live session is active. Tap to edit host settings."
+                return ""
             case .stopping:
                 return activeTransportStatusDetail(fallback: "Shutting down the live session.")
             case .disconnected, .error:
@@ -744,7 +744,7 @@ final class AppModel: ObservableObject {
         }
 
         return setupStatus == .ready
-            ? "Tap to edit the host or port."
+            ? ""
             : hostSetupHint
     }
 
@@ -765,11 +765,7 @@ final class AppModel: ObservableObject {
     }
 
     var hostSettingsStatusText: String {
-        if setupStatus == .ready {
-            return "Ready to stream to \(hostConfiguration.displayEndpoint) over \(hostConfiguration.transportMode.label)."
-        }
-
-        return setupDetail
+        setupStatus == .ready ? "" : setupDetail
     }
 
     var lastSuccessfulSendSummary: String {
