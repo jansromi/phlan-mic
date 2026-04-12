@@ -1,0 +1,48 @@
+App model initialized.
+Running on iPhone/iPadOS 26.3.1.
+Preferred MVP audio format: 48000 Hz, 1 ch, 16-bit PCM, 20 ms (960 frames / 1920 bytes).
+Packet cadence: seq 0, 960 frames, payload 1920 bytes.
+Microphone permission state: Granted.
+Called -[UIContextMenuInteraction updateVisibleMenuWithBlock:] while no context menu is visible. This won't do anything.
+Connecting to the Windows host at 192.168.50.18:42100 using UDP Realtime.
+TCP control channel connected. Sending hello.
+Control message sent: hello.
+Control message received: helloAccepted.
+Control message sent: startStream.
+Handshake accepted. Requesting UDP stream start on port 42101.
+Control message received: startAccepted.
+UDP audio stream accepted.
+Tone generator capture started for UDP Realtime streaming. Tone generator: 440 Hz sine wave, 48000 Hz, 1 ch, 16-bit PCM, 20 ms (960 frames / 1920 bytes).
+Capture buffer diagnostics (stream, first, callback 1): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+First microphone frame captured for streaming: seq 0, 960 frames, 1920 bytes.
+Streaming started with microphone frame 0 over UDP Realtime.
+Capture buffer diagnostics (stream, periodic, callback 50): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 100): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 150): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 200): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 250): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Streaming health: 250 frames / 491000 bytes sent to 192.168.50.18:42100.
+Capture buffer diagnostics (stream, periodic, callback 300): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 350): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 400): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 450): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 500): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Streaming health: 500 frames / 982000 bytes sent to 192.168.50.18:42100.
+Capture buffer diagnostics (stream, periodic, callback 550): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 600): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 650): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 700): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 750): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Streaming health: 750 frames / 1473000 bytes sent to 192.168.50.18:42100.
+Capture buffer diagnostics (stream, periodic, callback 800): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 850): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 900): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 950): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 1000): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Streaming health: 1000 frames / 1964000 bytes sent to 192.168.50.18:42100.
+Capture buffer diagnostics (stream, periodic, callback 1050): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 1100): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Capture buffer diagnostics (stream, periodic, callback 1150): frameLength=960, rawBytes=1920, validBytes=1920, peak=80%, rms=57%, packets=1, pendingBytes=0.
+Stopping the UDP Realtime session.
+Control message sent: stopStream.
+Realtime transport stopped.

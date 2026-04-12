@@ -425,11 +425,6 @@ internal sealed class VbCablePlaybackSink : IAudioOutputSink
             return true;
         }
 
-        if (allowSilence && readResult.Status is AudioReadStatus.WaitingForFrame)
-        {
-            return false;
-        }
-
         if (!allowSilence)
         {
             return false;

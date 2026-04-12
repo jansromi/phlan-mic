@@ -9,8 +9,8 @@ final class AppModelTests: XCTestCase {
 
         XCTAssertEqual(model.micGain, AppModel.defaultMicGain)
         XCTAssertEqual(harness.captureGainValues, [AppModel.defaultMicGain])
-        XCTAssertEqual(model.micGainLabel, "1.0x")
-        XCTAssertEqual(model.micGainDecibelsLabel, "+0.0 dB")
+        XCTAssertEqual(normalizedDecimalString(model.micGainLabel), "1.0x")
+        XCTAssertEqual(normalizedDecimalString(model.micGainDecibelsLabel), "+0.0 dB")
     }
 
     func testUpdatingMicGainClampsAndForwardsToCaptureClient() {
@@ -636,6 +636,10 @@ final class AppModelTests: XCTestCase {
     }
 }
 
+private func normalizedDecimalString(_ value: String) -> String {
+    value.replacingOccurrences(of: ",", with: ".")
+}
+
 private final class Harness {
     var currentPermissionStatus: MicrophonePermissionState = .unknown
     var requestPermissionStatus: MicrophonePermissionState = .granted
@@ -656,7 +660,7 @@ private final class Harness {
                 currentPermissionStatus = requestPermissionStatus
                 return requestPermissionStatus
             },
-            startCapture: { [unowned self] _, profile, _, _, _, onSessionEvent in
+            startCapture: { [unowned self] _, profile, _, _, _, _, onSessionEvent in
                 captureSessionEventHandler = onSessionEvent
                 return MicrophoneCaptureStartup(
                     requestedFormat: .defaultVoice,
@@ -670,6 +674,7 @@ private final class Harness {
                     routeSummary: "inputs[builtInMic=Built-In Microphone] outputs[none]"
                 )
             },
+            startToneCapture: { _, _, _, _ in },
             setCaptureGain: { [unowned self] gain in
                 captureGainValues.append(gain)
             },

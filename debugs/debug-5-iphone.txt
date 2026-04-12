@@ -1,0 +1,30 @@
+App model initialized.
+Running on iPhone/iPadOS 26.3.1.
+Preferred MVP audio format: 48000 Hz, 1 ch, 16-bit PCM, 20 ms (960 frames / 1920 bytes).
+Packet cadence: seq 0, 960 frames, payload 1920 bytes.
+Microphone permission state: Granted.
+Connecting to the Windows host at 192.168.50.18:42100 using UDP Realtime.
+TCP control channel connected. Sending hello.
+Control message sent: hello.
+Control message received: helloAccepted.
+Control message sent: startStream.
+Handshake accepted. Requesting UDP stream start on port 42101.
+Control message received: startAccepted.
+UDP audio stream accepted.
+Microphone capture started for UDP Realtime streaming. Profile Record + Measurement. Input 48000 Hz, 1 ch, Float32 PCM, non-interleaved. Output 48000 Hz, 1 ch, Int16 PCM, interleaved. Session 48000 Hz / 20 ms buffer. Category AVAudioSessionCategoryRecord, mode AVAudioSessionModeMeasurement, route inputs[MicrophoneBuiltIn=iPhone Microphone] outputs[none].
+Audio route changed: Category Change | input available | inputs[MicrophoneBuiltIn=iPhone Microphone] outputs[none].
+Capture buffer diagnostics (stream, first, callback 1): frameLength=4096, rawBytes=8192, validBytes=8192, peak=100%, rms=4%, packets=4, pendingBytes=512.
+First microphone frame captured for streaming: seq 0, 960 frames, 1920 bytes.
+Streaming started with microphone frame 0 over UDP Realtime.
+Capture buffer diagnostics (stream, periodic, callback 50): frameLength=4832, rawBytes=9664, validBytes=9664, peak=0%, rms=0%, packets=5, pendingBytes=704.
+Streaming health: 250 frames / 491000 bytes sent to 192.168.50.18:42100.
+Capture buffer diagnostics (stream, periodic, callback 100): frameLength=4832, rawBytes=9664, validBytes=9664, peak=15%, rms=2%, packets=5, pendingBytes=960.
+Streaming health: 500 frames / 982000 bytes sent to 192.168.50.18:42100.
+Capture buffer diagnostics (stream, periodic, callback 150): frameLength=4832, rawBytes=9664, validBytes=9664, peak=0%, rms=0%, packets=5, pendingBytes=1216.
+Streaming health: 750 frames / 1473000 bytes sent to 192.168.50.18:42100.
+Capture buffer diagnostics (stream, periodic, callback 200): frameLength=4832, rawBytes=9664, validBytes=9664, peak=0%, rms=0%, packets=5, pendingBytes=1472.
+Streaming health: 1000 frames / 1964000 bytes sent to 192.168.50.18:42100.
+UDP Realtime transport failed: The Windows host closed the realtime control channel.
+Scene state changed to inactive.
+Scene state changed to background.
+Message from debugger: killed

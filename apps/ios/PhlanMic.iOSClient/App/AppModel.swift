@@ -222,6 +222,50 @@ final class AppModel: ObservableObject {
         }
     }
 
+    private final class CaptureDiagnosticUpdateBuffer: @unchecked Sendable {
+        struct Snapshot: Sendable {
+            let callbackCount: Int
+            let reason: String
+            let diagnostic: CaptureBufferDiagnostic
+        }
+
+        private let lock = NSLock()
+        private let updateEveryCallbacks: Int
+        private var callbackCount = 0
+
+        init(updateEveryCallbacks: Int) {
+            self.updateEveryCallbacks = max(1, updateEveryCallbacks)
+        }
+
+        func record(_ diagnostic: CaptureBufferDiagnostic) -> Snapshot? {
+            lock.lock()
+            defer { lock.unlock() }
+
+            callbackCount += 1
+
+            let reason: String?
+            if callbackCount == 1 {
+                reason = "first"
+            } else if diagnostic.hasByteCountMismatch {
+                reason = "byteMismatch"
+            } else if callbackCount.isMultiple(of: updateEveryCallbacks) {
+                reason = "periodic"
+            } else {
+                reason = nil
+            }
+
+            guard let reason else {
+                return nil
+            }
+
+            return Snapshot(
+                callbackCount: callbackCount,
+                reason: reason,
+                diagnostic: diagnostic
+            )
+        }
+    }
+
     private final class TransportSendProgressBuffer: @unchecked Sendable {
         struct Snapshot: Sendable {
             let totalFramesSent: Int
@@ -367,10 +411,17 @@ final class AppModel: ObservableObject {
             MVPAudioFormat,
             CaptureAudioSessionProfile,
             @escaping @Sendable (AudioInputLevel) -> Void,
+            @escaping @Sendable (CaptureBufferDiagnostic) -> Void,
             @escaping @Sendable (CapturedAudioFrame) -> Void,
             @escaping @Sendable (Error) -> Void,
             @escaping @Sendable (CaptureSessionEvent) -> Void
         ) throws -> MicrophoneCaptureStartup
+        var startToneCapture: (
+            MVPAudioFormat,
+            @escaping @Sendable (AudioInputLevel) -> Void,
+            @escaping @Sendable (CaptureBufferDiagnostic) -> Void,
+            @escaping @Sendable (CapturedAudioFrame) -> Void
+        ) -> Void
         var setCaptureGain: (Float) -> Void
         var stopCapture: () -> Void
         var makeTransportClient: (
@@ -382,6 +433,7 @@ final class AppModel: ObservableObject {
         static func live() -> Dependencies {
             let permissionClient = MicrophonePermissionClient()
             let captureClient = MicrophoneCaptureClient()
+            let toneClient = ToneGeneratorCaptureClient()
             let logger = AppLogger()
 
             return Dependencies(
@@ -391,14 +443,23 @@ final class AppModel: ObservableObject {
                 requestMicrophonePermission: {
                     await permissionClient.requestPermission()
                 },
-                startCapture: { format, profile, onInputLevel, onFrame, onFailure, onSessionEvent in
+                startCapture: { format, profile, onInputLevel, onCaptureDiagnostic, onFrame, onFailure, onSessionEvent in
                     try captureClient.startCapture(
                         format: format,
                         profile: profile,
                         onInputLevel: onInputLevel,
+                        onCaptureDiagnostic: onCaptureDiagnostic,
                         onFrame: onFrame,
                         onFailure: onFailure,
                         onSessionEvent: onSessionEvent
+                    )
+                },
+                startToneCapture: { format, onInputLevel, onCaptureDiagnostic, onFrame in
+                    toneClient.start(
+                        format: format,
+                        onInputLevel: onInputLevel,
+                        onCaptureDiagnostic: onCaptureDiagnostic,
+                        onFrame: onFrame
                     )
                 },
                 setCaptureGain: { gain in
@@ -406,6 +467,7 @@ final class AppModel: ObservableObject {
                 },
                 stopCapture: {
                     captureClient.stopCapture()
+                    toneClient.stop()
                 },
                 makeTransportClient: { transportMode, handler in
                     switch transportMode {
@@ -486,6 +548,7 @@ final class AppModel: ObservableObject {
     }
     @Published var isStreamingInBackground = false
     @Published var backgroundStatusDetail = BackgroundContinuationPolicy.activeSessionOnly.defaultDetail
+    @Published var useToneGenerator = false
 
     private let dependencies: Dependencies
     private var currentTransportClient: AudioTransportClient?
@@ -1327,25 +1390,30 @@ final class AppModel: ObservableObject {
     }
 
     private func startCapturePipeline(streamToTransport: Bool) async {
-        if microphonePermission == .unknown {
-            await requestMicrophonePermission()
-        }
+        let toneMode = useToneGenerator
 
-        guard microphonePermission == .granted else {
-            if streamToTransport {
-                handleTransportFailure(
-                    detail: "Microphone access is required before streaming to the Windows host.",
-                    logMessage: "Streaming could not start because microphone access was unavailable."
-                )
+        if !toneMode {
+            if microphonePermission == .unknown {
+                await requestMicrophonePermission()
             }
-            syncCaptureAvailability()
-            return
+
+            guard microphonePermission == .granted else {
+                if streamToTransport {
+                    handleTransportFailure(
+                        detail: "Microphone access is required before streaming to the Windows host.",
+                        logMessage: "Streaming could not start because microphone access was unavailable."
+                    )
+                }
+                syncCaptureAvailability()
+                return
+            }
         }
 
         captureStatus = .starting
+        let sourceLabel = toneMode ? "440 Hz tone generator" : "AVAudioSession"
         captureDetail = streamToTransport
-            ? "Configuring AVAudioSession for \(hostConfiguration.transportMode.label) streaming."
-            : "Configuring AVAudioSession and starting the microphone tap."
+            ? "Configuring \(sourceLabel) for \(hostConfiguration.transportMode.label) streaming."
+            : "Configuring \(sourceLabel) and starting capture."
         captureSessionSummary = streamToTransport ? "Starting stream capture." : "Starting capture."
         latestInputLevel = .silence
         capturedFrameCount = 0
@@ -1356,66 +1424,96 @@ final class AppModel: ObservableObject {
             let transportClient = currentTransportClient
             let inputLevelUpdateBuffer = InputLevelUpdateBuffer(updateEveryCallbacks: streamToTransport ? 3 : 1)
             let captureFrameUpdateBuffer = CaptureFrameUpdateBuffer(updateEveryFrames: streamToTransport ? 25 : 1)
+            let captureDiagnosticUpdateBuffer = CaptureDiagnosticUpdateBuffer(updateEveryCallbacks: streamToTransport ? 50 : 10)
             let transportSendProgressBuffer = TransportSendProgressBuffer(flushEveryFrames: 25)
-            let startup = try dependencies.startCapture(
-                .defaultVoice,
-                captureAudioSessionProfile,
-                { inputLevel in
-                    guard let levelUpdate = inputLevelUpdateBuffer.record(inputLevel) else {
-                        return
-                    }
 
+            let inputLevelCallback: @Sendable (AudioInputLevel) -> Void = { inputLevel in
+                guard let levelUpdate = inputLevelUpdateBuffer.record(inputLevel) else {
+                    return
+                }
+
+                Task { @MainActor in
+                    model.latestInputLevel = levelUpdate
+                }
+            }
+
+            let diagnosticCallback: @Sendable (CaptureBufferDiagnostic) -> Void = { diagnostic in
+                guard let diagnosticSnapshot = captureDiagnosticUpdateBuffer.record(diagnostic) else {
+                    return
+                }
+
+                Task { @MainActor in
+                    model.handleCaptureDiagnostic(diagnosticSnapshot, streamToTransport: streamToTransport)
+                }
+            }
+
+            let frameCallback: @Sendable (CapturedAudioFrame) -> Void = { frame in
+                if let captureSnapshot = captureFrameUpdateBuffer.record(frame) {
                     Task { @MainActor in
-                        model.latestInputLevel = levelUpdate
+                        model.handleCapturedFrameUpdate(captureSnapshot, streamToTransport: streamToTransport)
                     }
-                },
-                { frame in
-                    if let captureSnapshot = captureFrameUpdateBuffer.record(frame) {
-                        Task { @MainActor in
-                            model.handleCapturedFrameUpdate(captureSnapshot, streamToTransport: streamToTransport)
-                        }
-                    }
+                }
 
-                    if streamToTransport {
-                        transportClient?.sendFrame(frame) { result in
-                            switch result {
-                            case .success(let bytesSent):
-                                guard let progressSnapshot = transportSendProgressBuffer.recordSuccess(bytesSent: bytesSent) else {
-                                    return
-                                }
+                if streamToTransport {
+                    transportClient?.sendFrame(frame) { result in
+                        switch result {
+                        case .success(let bytesSent):
+                            guard let progressSnapshot = transportSendProgressBuffer.recordSuccess(bytesSent: bytesSent) else {
+                                return
+                            }
 
-                                Task { @MainActor in
-                                    model.handleSendProgress(progressSnapshot, latestFrame: frame)
-                                }
-                            case .failure:
-                                Task { @MainActor in
-                                    model.handleSendCompletion(result, for: frame)
-                                }
+                            Task { @MainActor in
+                                model.handleSendProgress(progressSnapshot, latestFrame: frame)
+                            }
+                        case .failure:
+                            Task { @MainActor in
+                                model.handleSendCompletion(result, for: frame)
                             }
                         }
                     }
-                },
-                { error in
-                    Task { @MainActor in
-                        model.handleCaptureFailure(error)
-                    }
-                },
-                { event in
-                    Task { @MainActor in
-                        model.handleCaptureSessionEvent(event)
-                    }
                 }
-            )
+            }
+
+            var startupSummary: String
+
+            if toneMode {
+                dependencies.startToneCapture(
+                    .defaultVoice,
+                    inputLevelCallback,
+                    diagnosticCallback,
+                    frameCallback
+                )
+                startupSummary = "Tone generator: 440 Hz sine wave, \(MVPAudioFormat.defaultVoice.debugSummary)."
+            } else {
+                let startup = try dependencies.startCapture(
+                    .defaultVoice,
+                    captureAudioSessionProfile,
+                    inputLevelCallback,
+                    diagnosticCallback,
+                    frameCallback,
+                    { error in
+                        Task { @MainActor in
+                            model.handleCaptureFailure(error)
+                        }
+                    },
+                    { event in
+                        Task { @MainActor in
+                            model.handleCaptureSessionEvent(event)
+                        }
+                    }
+                )
+                startupSummary = startup.debugSummary
+            }
 
             captureStatus = .capturing
             captureDetail = streamToTransport
-                ? "Live microphone capture is feeding the \(hostConfiguration.transportMode.label) stream at \(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) ms packet cadence."
-                : "Live microphone capture is running at \(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) ms packet cadence."
-            captureSessionSummary = startup.debugSummary
+                ? "\(toneMode ? "Tone generator" : "Live microphone capture") is feeding the \(hostConfiguration.transportMode.label) stream at \(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) ms packet cadence."
+                : "\(toneMode ? "Tone generator" : "Live microphone capture") is running at \(MVPAudioFormat.defaultVoice.packetDurationMilliseconds) ms packet cadence."
+            captureSessionSummary = startupSummary
             if streamToTransport {
-                log("Microphone capture started for \(hostConfiguration.transportMode.label) streaming. \(startup.debugSummary)")
+                log("\(toneMode ? "Tone generator" : "Microphone") capture started for \(hostConfiguration.transportMode.label) streaming. \(startupSummary)")
             } else {
-                log("Microphone capture started. \(startup.debugSummary)")
+                log("\(toneMode ? "Tone generator" : "Microphone") capture started. \(startupSummary)")
             }
         } catch {
             captureStatus = .error
@@ -1453,6 +1551,21 @@ final class AppModel: ObservableObject {
                 log("First microphone frame captured: \(snapshot.latestFrameSummary).")
             }
         }
+    }
+
+    private func handleCaptureDiagnostic(
+        _ snapshot: CaptureDiagnosticUpdateBuffer.Snapshot,
+        streamToTransport: Bool
+    ) {
+        let diagnostic = snapshot.diagnostic
+        let streamLabel = streamToTransport ? "stream" : "capture"
+        log(
+            "Capture buffer diagnostics (\(streamLabel), \(snapshot.reason), callback \(snapshot.callbackCount)): " +
+            "frameLength=\(diagnostic.convertedFrameLength), rawBytes=\(diagnostic.converterBufferByteCount), " +
+            "validBytes=\(diagnostic.extractedPayloadByteCount), peak=\(diagnostic.extractedPayloadLevel.peakPercentage)%, " +
+            "rms=\(diagnostic.extractedPayloadLevel.averagePercentage)%, packets=\(diagnostic.framedPacketCount), " +
+            "pendingBytes=\(diagnostic.pendingPacketBytes)."
+        )
     }
 
     private func handleCaptureFailure(_ error: Error) {

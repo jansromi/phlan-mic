@@ -24,6 +24,7 @@
 		A00000010000000000000015 /* UdpRawPcmTransportClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000017 /* UdpRawPcmTransportClient.swift */; };
 		A00000010000000000000016 /* TransportProtocolTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000018 /* TransportProtocolTests.swift */; };
 		A00000010000000000000017 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000019 /* Assets.xcassets */; };
+		A00000010000000000000018 /* ToneGeneratorCaptureClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000110000000000000020 /* ToneGeneratorCaptureClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,6 +57,7 @@
 		A00000110000000000000017 /* UdpRawPcmTransportClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UdpRawPcmTransportClient.swift; sourceTree = "<group>"; };
 		A00000110000000000000018 /* TransportProtocolTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransportProtocolTests.swift; sourceTree = "<group>"; };
 		A00000110000000000000019 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A00000110000000000000020 /* ToneGeneratorCaptureClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToneGeneratorCaptureClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -124,6 +126,7 @@
 				A00000110000000000000004 /* AudioFormat.swift */,
 				A00000110000000000000005 /* AudioPacket.swift */,
 				A00000110000000000000010 /* MicrophoneCaptureClient.swift */,
+				A00000110000000000000020 /* ToneGeneratorCaptureClient.swift */,
 			);
 			path = Audio;
 			sourceTree = "<group>";
@@ -277,6 +280,7 @@
 				A00000010000000000000014 /* TransportProtocol.swift in Sources */,
 				A00000010000000000000001 /* PhlanMicIOSClientApp.swift in Sources */,
 				A00000010000000000000015 /* UdpRawPcmTransportClient.swift in Sources */,
+				A00000010000000000000018 /* ToneGeneratorCaptureClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

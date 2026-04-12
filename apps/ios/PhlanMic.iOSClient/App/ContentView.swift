@@ -751,6 +751,8 @@ private struct HostConfigurationFields: View {
             }
         }
 
+        Toggle("Tone Generator (440 Hz)", isOn: $model.useToneGenerator)
+
         if showsCheckpointButton {
             Button("Record Bring-Up Checkpoint") {
                 model.recordBringUpCheckpoint()

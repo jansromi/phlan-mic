@@ -360,15 +360,6 @@ internal sealed class WaveOutPlaybackSink : IAudioOutputSink
             return true;
         }
 
-        if (allowSilence && readResult.Status is AudioReadStatus.WaitingForFrame)
-        {
-            payload = Array.Empty<byte>();
-            sequenceNumber = null;
-            capturedAtUtc = null;
-            isSilence = false;
-            return false;
-        }
-
         if (allowSilence)
         {
             payload = new byte[outputFormat.BytesPerFrame];

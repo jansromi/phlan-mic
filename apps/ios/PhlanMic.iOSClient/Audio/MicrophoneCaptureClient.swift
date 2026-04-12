@@ -44,6 +44,19 @@ struct AudioInputLevel: Equatable, Sendable {
     }
 }
 
+struct CaptureBufferDiagnostic: Sendable {
+    let convertedFrameLength: Int
+    let converterBufferByteCount: Int
+    let extractedPayloadByteCount: Int
+    let extractedPayloadLevel: AudioInputLevel
+    let framedPacketCount: Int
+    let pendingPacketBytes: Int
+
+    var hasByteCountMismatch: Bool {
+        converterBufferByteCount != extractedPayloadByteCount
+    }
+}
+
 enum CaptureAudioSessionProfile: String, Sendable, Equatable {
     case recordMeasurement
     case playAndRecordMeasurement
@@ -149,6 +162,7 @@ final class MicrophoneCaptureClient {
     private var accumulator: PCMFrameAccumulator?
     private var inputGain: Float = 1
     private var onInputLevel: (@Sendable (AudioInputLevel) -> Void)?
+    private var onCaptureDiagnostic: (@Sendable (CaptureBufferDiagnostic) -> Void)?
     private var onFrame: (@Sendable (CapturedAudioFrame) -> Void)?
     private var onFailure: (@Sendable (Error) -> Void)?
     private var onSessionEvent: (@Sendable (CaptureSessionEvent) -> Void)?
@@ -159,6 +173,7 @@ final class MicrophoneCaptureClient {
         format: MVPAudioFormat = .defaultVoice,
         profile: CaptureAudioSessionProfile = .recordMeasurement,
         onInputLevel: @escaping @Sendable (AudioInputLevel) -> Void,
+        onCaptureDiagnostic: @escaping @Sendable (CaptureBufferDiagnostic) -> Void,
         onFrame: @escaping @Sendable (CapturedAudioFrame) -> Void,
         onFailure: @escaping @Sendable (Error) -> Void,
         onSessionEvent: @escaping @Sendable (CaptureSessionEvent) -> Void
@@ -203,6 +218,7 @@ final class MicrophoneCaptureClient {
         self.converter = converter
         self.accumulator = PCMFrameAccumulator(format: format)
         self.onInputLevel = onInputLevel
+        self.onCaptureDiagnostic = onCaptureDiagnostic
         self.onFrame = onFrame
         self.onFailure = onFailure
         self.onSessionEvent = onSessionEvent
@@ -275,6 +291,7 @@ final class MicrophoneCaptureClient {
         accumulator = nil
         targetFormat = nil
         onInputLevel = nil
+        onCaptureDiagnostic = nil
         onFrame = nil
         onFailure = nil
         onSessionEvent = nil
@@ -302,10 +319,21 @@ final class MicrophoneCaptureClient {
             self.accumulator = accumulator
 
             let levelCallback = onInputLevel
+            let captureDiagnosticCallback = onCaptureDiagnostic
             let frameCallback = onFrame
             lock.unlock()
 
             levelCallback?(inputLevel)
+            captureDiagnosticCallback?(
+                CaptureBufferDiagnostic(
+                    convertedFrameLength: Int(convertedBuffer.frameLength),
+                    converterBufferByteCount: Int(convertedBuffer.audioBufferList.pointee.mBuffers.mDataByteSize),
+                    extractedPayloadByteCount: payload.count,
+                    extractedPayloadLevel: inputLevel,
+                    framedPacketCount: frames.count,
+                    pendingPacketBytes: accumulator.pendingByteCount
+                )
+            )
             for frame in frames {
                 frameCallback?(frame)
             }
@@ -367,7 +395,7 @@ final class MicrophoneCaptureClient {
             return Data()
         }
 
-        return Data(bytes: rawData, count: Int(audioBuffer.mDataByteSize))
+        return Data(bytes: rawData, count: validPCMByteCount(for: buffer))
     }
 
     private static func applyGain(_ gain: Float, to buffer: AVAudioPCMBuffer) {
@@ -381,7 +409,7 @@ final class MicrophoneCaptureClient {
             return
         }
 
-        let sampleCount = Int(audioBuffer.mDataByteSize) / MemoryLayout<Int16>.size
+        let sampleCount = validPCMByteCount(for: buffer) / MemoryLayout<Int16>.size
         guard sampleCount > 0 else {
             return
         }
@@ -404,7 +432,7 @@ final class MicrophoneCaptureClient {
             return .silence
         }
 
-        let sampleCount = Int(audioBuffer.mDataByteSize) / MemoryLayout<Int16>.size
+        let sampleCount = validPCMByteCount(for: buffer) / MemoryLayout<Int16>.size
         guard sampleCount > 0 else {
             return .silence
         }
@@ -424,6 +452,31 @@ final class MicrophoneCaptureClient {
 
         let averageLevel = sqrt(squaredSum / Float(sampleCount))
         return AudioInputLevel(averageLevel: averageLevel, peakLevel: peakLevel)
+    }
+
+    private static func validPCMByteCount(for buffer: AVAudioPCMBuffer) -> Int {
+        let audioBuffer = buffer.audioBufferList.pointee.mBuffers
+        let validByteCount = Int(buffer.frameLength) * bytesPerFrame(for: buffer.format)
+        return min(validByteCount, Int(audioBuffer.mDataByteSize))
+    }
+
+    private static func bytesPerFrame(for format: AVAudioFormat) -> Int {
+        let bytesPerSample: Int
+
+        switch format.commonFormat {
+        case .pcmFormatInt16:
+            bytesPerSample = MemoryLayout<Int16>.size
+        case .pcmFormatInt32, .pcmFormatFloat32:
+            bytesPerSample = MemoryLayout<Int32>.size
+        case .pcmFormatFloat64:
+            bytesPerSample = MemoryLayout<Double>.size
+        case .otherFormat:
+            bytesPerSample = Int(format.streamDescription.pointee.mBytesPerFrame) / max(Int(format.channelCount), 1)
+        @unknown default:
+            bytesPerSample = Int(format.streamDescription.pointee.mBytesPerFrame) / max(Int(format.channelCount), 1)
+        }
+
+        return max(Int(format.channelCount), 1) * max(bytesPerSample, 1)
     }
 
     private func registerSessionObservers() {
@@ -609,6 +662,10 @@ private struct PCMFrameAccumulator {
         }
 
         return frames
+    }
+
+    var pendingByteCount: Int {
+        pendingPayload.count
     }
 }
 
